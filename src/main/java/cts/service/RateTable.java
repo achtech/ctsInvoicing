@@ -3,7 +3,7 @@ package cts.service;
 import java.util.Map;
 
 public class RateTable {
-    private static java.util.Map<Double, String> rateMap;
+    private static final java.util.Map<Double, String> rateMap;
 
     static {
         rateMap = new java.util.HashMap<>();

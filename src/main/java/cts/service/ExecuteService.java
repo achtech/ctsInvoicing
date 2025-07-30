@@ -1,25 +1,27 @@
-package cts;
+package cts.service;
 
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
-import cts.service.*;
 import cts.service.impl.*;
 import cts.util.Utils;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.List;
+
 import static cts.service.ExcelFileNameGenerator.*;
 
-public class Main {
-	private final DateProvider dateProvider;
+public class ExecuteService {
+    private final DateProvider dateProvider;
     private final ExcelFileNameGenerator fileNameGenerator;
     private final ExcelReader excelReader;
     private final ServiceTeamExtractor serviceTeamExtractor;
     private final ExcelWriter excelWriter;
 
-    public Main(
+    public ExecuteService(
             DateProvider dateProvider,
             ExcelFileNameGenerator fileNameGenerator,
             ExcelReader excelReader,
@@ -32,14 +34,9 @@ public class Main {
         this.excelWriter = excelWriter;
     }
 
-    public void process() {
-    	Scanner scanner = new Scanner(System.in);
-        System.out.println("Enter the Excel file path (e.g., C:\\Temp\\data.xlsx):");
-        String filePath = scanner.nextLine().trim(); // Trim to remove extra spaces
-        scanner.close();
-
+    public void process(String inputExcelFilePath, String outputGeneratedExcelsFilePath) {
         // Normalize the path for cross-platform compatibility
-        File file = new File(filePath).getAbsoluteFile();
+        File file = new File(inputExcelFilePath).getAbsoluteFile();
         System.out.println("Resolved path: " + file.getAbsolutePath());
 
         // Validate file
@@ -56,10 +53,10 @@ public class Main {
             return;
         }
         try (FileInputStream fis = new FileInputStream(file);
-                Workbook inputWorkbook = new XSSFWorkbook(fis)) {
+             Workbook inputWorkbook = new XSSFWorkbook(fis)) {
 
 
-            LocalDate currentDate = dateProvider.getCurrentDate(filePath);
+            LocalDate currentDate = dateProvider.getCurrentDate(inputExcelFilePath);
             int currentYear = dateProvider.getYear(currentDate);
             int currentMonth = dateProvider.getMonthValue(currentDate);
             String currentMonthName = dateProvider.getMonthNameEnglish(currentDate);
@@ -69,16 +66,7 @@ public class Main {
             String nextMonthSpanish = dateProvider.getMonthNameSpanish(currentDate.plusMonths(1));
             String nextNextMonthSpanish = dateProvider.getMonthNameSpanish(currentDate.plusMonths(2));
 
-//            LocalDate currentDate = dateProvider.getCurrentDate();
-//            int currentYear = dateProvider.getYear(currentDate);
-//            int currentMonth = dateProvider.getMonthValue(currentDate);
-//            String currentMonthName = dateProvider.getMonthNameEnglish(currentDate);
-//            String nextMonthName = dateProvider.getMonthNameEnglish(currentDate.plusMonths(1));
-//            String nextNextMonthName = dateProvider.getMonthNameEnglish(currentDate.plusMonths(2));
-//            String currentMonthSpanish = dateProvider.getMonthNameSpanish(currentDate);
-//            String nextMonthSpanish = dateProvider.getMonthNameSpanish(currentDate.plusMonths(1));
-//            String nextNextMonthSpanish = dateProvider.getMonthNameSpanish(currentDate.plusMonths(2));
-            String outputDirectory = Utils.getDesktopPath()+ "/INVOICING/" + currentMonthName + "_" + currentYear;
+            String outputDirectory = outputGeneratedExcelsFilePath + "/Version_" + dateProvider.getCurrentDateTime();
 
             Sheet facturacionSheet = excelReader.getSheet(inputWorkbook, "Facturación " + currentMonthSpanish);
 
@@ -87,13 +75,9 @@ public class Main {
 
             for (String serviceTeam : serviceTeamNames) {
                 try (Workbook outputWorkbook = excelWriter.createWorkbookWithSheets(currentMonthName, nextMonthName, nextNextMonthName)) {
-//                    excelWriter.copyAdjustmentSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_AJUSTES, SHEET_ADJUSTMENT);
-//                    excelWriter.copyFacturationSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_FACTURACION+" "+currentMonthSpanish, SHEET_INVOICING_DETAILS+" "+currentMonthName);
-//                    excelWriter.copyFacturationSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_FACTURACION+" "+nextMonthSpanish, SHEET_INVOICING_DETAILS+" "+nextMonthName);
-//                    excelWriter.copyFacturationSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_FACTURACION+" "+nextNextMonthSpanish, SHEET_INVOICING_DETAILS+" "+nextNextMonthName);
-                    excelWriter.copyServiceHoursSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_HORAS_SERVICIO+" "+currentMonthSpanish, SHEET_SERVICE_HOURS_DETAILS+" "+currentMonthName,SHEET_AJUSTES);
-                    excelWriter.copyServiceHoursSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_HORAS_SERVICIO+" "+nextMonthSpanish, SHEET_SERVICE_HOURS_DETAILS+" "+nextMonthName,SHEET_AJUSTES);
-                    excelWriter.copyServiceHoursSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_HORAS_SERVICIO+" "+nextNextMonthSpanish, SHEET_SERVICE_HOURS_DETAILS+" "+nextNextMonthName,SHEET_AJUSTES);
+                    excelWriter.copyServiceHoursSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_HORAS_SERVICIO + " " + currentMonthSpanish, SHEET_SERVICE_HOURS_DETAILS + " " + currentMonthName, SHEET_AJUSTES);
+                    excelWriter.copyServiceHoursSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_HORAS_SERVICIO + " " + nextMonthSpanish, SHEET_SERVICE_HOURS_DETAILS + " " + nextMonthName, SHEET_AJUSTES);
+                    excelWriter.copyServiceHoursSheetData(inputWorkbook, outputWorkbook, serviceTeam, SHEET_HORAS_SERVICIO + " " + nextNextMonthSpanish, SHEET_SERVICE_HOURS_DETAILS + " " + nextNextMonthName, SHEET_AJUSTES);
                     String outputFileName = fileNameGenerator.generateOutputFileName(currentMonth, currentYear, serviceTeam, outputDirectory);
                     Utils.writeWorkbook(outputWorkbook, outputFileName);
                 }
@@ -103,14 +87,14 @@ public class Main {
         }
     }
 
-    public static void main(String[] args) {
-        Main processor = new Main(
+    public static void executeScript(String inputExcelFilePath, String outputExcelsFilePath) {
+        ExecuteService processor = new ExecuteService(
                 new DefaultDateProvider(),
                 new DefaultExcelFileNameGenerator(),
                 new DefaultExcelReader(),
                 new ServiceTeamExtractorImpl(),
                 new DefaultExcelWriter()
         );
-        processor.process();
+        processor.process(inputExcelFilePath, outputExcelsFilePath);
     }
 }

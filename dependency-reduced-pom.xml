@@ -26,7 +26,7 @@
             <configuration>
               <transformers>
                 <transformer>
-                  <mainClass>cts.ui.FileSelectionInterface</mainClass>
+                  <mainClass>forecast.by.month.Main</mainClass>
                 </transformer>
               </transformers>
             </configuration>

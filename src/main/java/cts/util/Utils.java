@@ -288,6 +288,9 @@ public class Utils {
         String[] lastSectionParts = parts[parts.length - 1].split(" - ", 2);
         String[] currencyParts = lastSectionParts[1].split("/");
         String result = currencyParts[1].replace(" EUR", "").replace(",", ".").trim();
+        result = result.contains(" (Operative)") ? result.replace(" (Operative)","") : result.contains(" (Ajuste)") ? result.replace(" (Ajuste)","") : result;
+        result = result.contains(" - Operativa") ? result.replace(" - Operativa","") : result.contains(" (Ajuste)") ? result.replace(" (Ajuste)","") : result;
+        result = result.contains(" - Operative") ? result.replace(" - Operative","") : result.contains(" (Ajuste)") ? result.replace(" (Ajuste)","") : result;
         try {
             return Double.parseDouble(result);
         } catch (NumberFormatException e) {

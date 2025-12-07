@@ -45,7 +45,7 @@ public class DefaultExcelWriter implements ExcelWriter {
 
     @Override
     public void copyServiceHoursSheetData(Workbook inputWorkbook, Workbook outputWorkbook, String serviceTeam,
-                                          String invoicingSheetNameES, String invoicingSheetName, String ajustesSheetName) {
+                                          String invoicingSheetNameES, String invoicingSheetName, String ajustesSheetName, String facturacionSheetName) {
         // TODO Auto-generated method stub
         Sheet inputSheet = inputWorkbook.getSheet(invoicingSheetNameES);
         Sheet outputSheet = outputWorkbook.getSheet(invoicingSheetName);
@@ -94,7 +94,7 @@ public class DefaultExcelWriter implements ExcelWriter {
         // Iterate through rows in the input sheet
         Map<Double, List<Row>> maps = getAllData(inputSheet);
         Map<Double, List<Row>> mapsByServiceTeam = filterRowsByServiceTeam(maps, serviceTeam);
-        Map<Double, Row> mergedMaps = transformRows(mapsByServiceTeam);
+        Map<Double, Row> mergedMaps = transformRows(inputWorkbook, facturacionSheetName,mapsByServiceTeam);
         // WRITE DTAA IN EXCEL FILE
         for (Map.Entry<Double, Row> entry : mergedMaps.entrySet()) {
             Row row = entry.getValue();
@@ -145,9 +145,16 @@ public class DefaultExcelWriter implements ExcelWriter {
             if (row.getRowNum() != 0) {
                 // Create a new cell in the last column (new column)
                 Cell newCell = row.createCell(lastColumn + 1);
-                // Create formula: D(row_number) * last_column
-                String formula = "D" + (row.getRowNum() + 1) + "*" + letterCost + (row.getRowNum() + 1);
-                newCell.setCellFormula(formula);
+                Cell rateCell = row.getCell(3);
+                Cell descCell = row.getCell(1);
+                if(rateCell!=null && CellType.NUMERIC.equals(rateCell.getCellType()) && rateCell.getNumericCellValue() != 0) {
+                    // Create formula: D(row_number) * last_column
+                    String formula = "D" + (row.getRowNum() + 1) + "*" + letterCost + (row.getRowNum() + 1);
+                    newCell.setCellFormula(formula);
+                } else {
+//                    Double totalValue = getExactRowValueFromSheet();
+                    newCell.setCellValue(descCell.getStringCellValue());
+                }
                 newCell.setCellStyle(currencyStyle);
             }
         }
@@ -170,11 +177,11 @@ public class DefaultExcelWriter implements ExcelWriter {
             cellC.setCellStyle(centerStyle);
 
             Cell cellD = outputRow.createCell(3);
-            cellD.setCellValue(row.getCell(12).getNumericCellValue());
+            cellD.setCellValue(row.getCell(15).getNumericCellValue());
             cellD.setCellStyle(currencyStyle);
 
             Cell cellE = outputRow.createCell(4);
-            cellE.setCellValue(row.getCell(9).getNumericCellValue());
+            cellE.setCellValue(row.getCell(12).getNumericCellValue());
             cellE.setCellStyle(centerStyle);
             int lastCol = headers.length + nbrDaysInThisMonths;
             for (int i = headers.length + 1; i < lastCol; i++) {
@@ -183,13 +190,25 @@ public class DefaultExcelWriter implements ExcelWriter {
                 cellM.setCellStyle(centerStyle);
             }
             Cell cellAdj = outputRow.createCell(lastCol);
-            cellAdj.setCellValue(row.getCell(9).getNumericCellValue());
-            cellAdj.setCellStyle(centerStyle);
-
             Cell cellCost = outputRow.createCell(lastCol + 1);
-            String formulaCost = "D" + outputRowIndex + "*E" + outputRowIndex;
-            cellCost.setCellFormula(formulaCost);
+
+        //    if(CellType.NUMERIC.equals(cellE.getCellType()) && cellE.getNumericCellValue()!=0){
+                cellAdj.setCellValue(row.getCell(15).getNumericCellValue());
+                String formulaCost = "D" + outputRowIndex + "*E" + outputRowIndex;
+                cellCost.setCellFormula(formulaCost);
+                if(cellCost.getNumericCellValue()==0){
+                    cellCost.setCellValue(row.getCell(16).getNumericCellValue());
+                }
+//            } else {
+//                String desc = cellB.getStringCellValue();
+//                double agustoValue = getAgustoExactValueFromSheet(inputWorkbook, ajustesSheetName, serviceTeam, desc);
+//                cellAdj.setCellValue(9999);
+//                cellCost.setCellValue(9999);
+//            }
+
+            cellAdj.setCellStyle(centerStyle);
             cellCost.setCellStyle(currencyStyle);
+
 
         }
         // ADD TOTAL ROW
@@ -212,8 +231,8 @@ public class DefaultExcelWriter implements ExcelWriter {
         cellTotalHours.setCellStyle(headerStyle);
 
         Cell cellTotalCost = lastRow.createCell(lastColumn + 1);
-        String formula2 = "SUM(" + letterCost2 + "2:" + letterCost2 + (outputRowIndex) + ")";
-        cellTotalCost.setCellFormula(formula2);
+        double total = getTotalServiceTeam(inputWorkbook,serviceTeam,facturacionSheetName);
+        cellTotalCost.setCellValue(total);
         cellTotalCost.setCellStyle(footerCurrencyStyle);
 
         // Auto-size columns after all data is written
@@ -272,7 +291,7 @@ public class DefaultExcelWriter implements ExcelWriter {
         return filteredMap;
     }
 
-    private Map<Double, Row> transformRows(Map<Double, List<Row>> inputMap) {
+    private Map<Double, Row> transformRows(Workbook inputWorkbook,String sheetNameEs ,Map<Double, List<Row>> inputMap) {
         Map<Double, Row> resultMap = new HashMap<>();
         for (Map.Entry<Double, List<Row>> entry : inputMap.entrySet()) {
             Double key = entry.getKey();
@@ -306,13 +325,18 @@ public class DefaultExcelWriter implements ExcelWriter {
                 newRow.createCell(2).setCellValue(RateTable.getCategory(input));
             }
 
-            // Cell 2: Second cell of the second row
+            // RATE COLUMN
             CellStyle currencyStyle = Utils.getCurrencyStyle(workbook);
             if (rows.size() > 1 && rows.get(1).getCell(1) != null) {
                 Cell secondCellSecond = rows.get(1).getCell(1);
                 Double input = Utils.getRates(secondCellSecond.getStringCellValue());
+                String description = rows.get(0)!=null && rows.get(0).getCell(1)!=null && CellType.STRING.equals(rows.get(0).getCell(1).getCellType()) && !rows.get(0).getCell(1).getStringCellValue().isEmpty() ? rows.get(0).getCell(1).getStringCellValue():"";
                 Cell thirdCell = newRow.createCell(3);
-                thirdCell.setCellValue(input);
+
+                if(!description.isEmpty()) {
+                    Double exactRate = getExactValueFromSheet(inputWorkbook, sheetNameEs, description,6);
+                    thirdCell.setCellValue(exactRate);
+                }
                 thirdCell.setCellStyle(currencyStyle);
             }
 
@@ -372,4 +396,52 @@ public class DefaultExcelWriter implements ExcelWriter {
 
         return resultMap;
     }
+
+    public Double getTotalServiceTeam(Workbook inputWorkbook, String serviceTeam, String sheetName){
+        Sheet sheet = inputWorkbook.getSheet(sheetName);
+        FormulaEvaluator evaluator = inputWorkbook.getCreationHelper().createFormulaEvaluator();
+        if (sheet == null) return 0.0;
+
+        Double total = 0.0;
+        boolean inProjectBlock = false;
+        String projectBlock = "";
+        for (Row row : sheet) {
+            Cell projectCell = row.getCell(1); // Column B (index 1)
+            Cell cell0 = row.getCell(0);
+            projectBlock =cell0!=null && CellType.STRING.equals(cell0.getCellType())  && cell0.getStringCellValue() != null && !cell0.getStringCellValue().isEmpty() && cell0.getStringCellValue().equals("Número Empleado") ? projectCell.getStringCellValue() : projectBlock;
+            Cell totalCell = row.getCell(7);  // Column H (index 7)
+            String project = projectCell !=null ? projectCell.getStringCellValue()!=null ? projectCell.getStringCellValue().trim():"":"";
+            double val = totalCell!=null? evaluator.evaluate(totalCell).getNumberValue() : 0;
+            if(project.isEmpty() && val !=0 && projectBlock.contains(serviceTeam)) {
+                total =  val ;
+                break;
+            }
+            if (projectCell != null && projectCell.getCellType() == CellType.STRING) {
+                String cellValue = projectCell.getStringCellValue().trim();
+                if (cellValue.contains(serviceTeam)) {
+                    inProjectBlock = true;
+                } else if (inProjectBlock && !cellValue.isEmpty()) {
+                    inProjectBlock = false; // End of project block
+                }
+            }
+        }
+        return total;
+    }
+
+    public Double getExactValueFromSheet(Workbook inputWorkbook, String sheetName, String rowDescription, int column){
+        Sheet sheet = inputWorkbook.getSheet(sheetName);
+        FormulaEvaluator evaluator = inputWorkbook.getCreationHelper().createFormulaEvaluator();
+        if (sheet == null) return 0.0;
+
+        double exactValue = 0.0;
+        for (Row row : sheet) {
+            Cell cellDescription = row.getCell(1); // Column B (index 1)
+            if(cellDescription!=null && CellType.STRING.equals(cellDescription.getCellType())  && cellDescription.getStringCellValue() != null && !cellDescription.getStringCellValue().isEmpty() && cellDescription.getStringCellValue().equals(rowDescription)){
+                Cell cellValue = row.getCell(column);
+                exactValue = cellValue.getNumericCellValue();
+            }
+        }
+        return exactValue;
+    }
+
 }

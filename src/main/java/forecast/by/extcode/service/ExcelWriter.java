@@ -42,14 +42,15 @@ public class ExcelWriter {
             Cell c10 = row.createCell(0);c10.setCellValue(st.getProjectName());c10.setCellStyle(bodyStyle);
             Cell c11 = row.createCell(1);c11.setCellValue(st.getExtCode());c11.setCellStyle(bodyStyle);
             Cell c12 = row.createCell(2);c12.setCellValue(st.getProjectDescription());c12.setCellStyle(bodyStyle);
+            double costValue = Double.parseDouble(st.getCost().isEmpty() ? "0" : st.getCost());  // convert String → double
             Cell c13 = row.createCell(3);
-            double costValue = Double.parseDouble(st.getCost());  // convert String → double
             c13.setCellValue(costValue);                          // write numeric value
             c13.setCellStyle(currencyStyle);
             Cell c14 = row.createCell(4);c14.setCellValue(st.getBuDescription());c14.setCellStyle(bodyStyle);
         }
+
         double grandTotal = items.stream()
-                .mapToDouble(item -> Double.parseDouble(item.getCost()))
+                .mapToDouble(item -> Double.parseDouble(item.getCost().isEmpty() ? "0" :item.getCost() ))
                 .sum();
         int grandTotalRow = items.size()+1;
         Row footer = sheet.createRow(grandTotalRow);

@@ -42,7 +42,8 @@ public class Main {
             // Load reference data (adjust path as needed; assumes 'resources/Data.xlsx')
             ReferenceData referenceData = new ReferenceData();
 //            referenceData.load("Data.xlsx");
-            referenceData.load( "src/main/resources/Data.xlsx" );
+//            referenceData.load( "src/main/resources/Data.xlsx" );
+            referenceData.load( "C:\\Users\\Sanae\\Desktop\\Task_java_excel\\ctsInvoicing\\src\\main\\resources\\Data.xlsx" );
 
             GroupAggregator aggregator = new GroupAggregator();
             InputRowProcessor rowProcessor = new InputRowProcessor(referenceData);

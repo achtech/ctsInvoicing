@@ -26,6 +26,18 @@ public class OutputWriter {
             CellStyle headerStyle = getHeaderStyle(wb);
             CellStyle currencyStyle = getCurrencyStyle(wb);
 
+            for (Map.Entry<String, Map<String, Double>> groupEntry : aggregator.getAggregates().entrySet()) {
+                String group = groupEntry.getKey();
+                Double rate = referenceData.getRateByGroup(group);
+
+                if (rate == null) continue;
+
+                for (Map.Entry<String, Double> userEntry : groupEntry.getValue().entrySet()) {
+                    String user = userEntry.getKey();
+                    System.out.println("Group: " + group + " | User: " + user + " | Rate: " + rate);
+                }
+            }
+
             Sheet sheet = wb.createSheet("Consolidated");
             Row headerRow = sheet.createRow(0);
             Cell c1 = headerRow.createCell(0);c1.setCellValue("Cliente");c1.setCellStyle(headerStyle);
@@ -37,22 +49,27 @@ public class OutputWriter {
 
             int rowNum = 1;
             double total = 0;
-            for (Map.Entry<String, Double> entry : aggregator.getAggregates().entrySet()) {
-                String group = entry.getKey();
-                double horas = entry.getValue();
+            for (Map.Entry<String, Map<String, Double>> groupEntry : aggregator.getAggregates().entrySet()) {
+                String group = groupEntry.getKey();
                 Double rate = referenceData.getRateByGroup(group);
 
-                if (rate == null) continue; // Skip if no rate
+                if (rate == null) continue;
+
+                double horas = 0;
+                for (Double h : groupEntry.getValue().values()) {
+                    horas += h;
+                }
+
                 double facturacion = !("Tools".equals(group)) ? rate * horas : horas;
-                total+=facturacion;
+                total += facturacion;
 
                 Row dataRow = sheet.createRow(rowNum++);
-                Cell c7= dataRow.createCell(0);c7.setCellValue("Italy");c7.setCellStyle(bodyStyle);
-                Cell c8= dataRow.createCell(1);c8.setCellValue("INS-026696-00003");c8.setCellStyle(bodyStyle);
-                Cell c9= dataRow.createCell(2);c9.setCellValue(group);c9.setCellStyle(bodyStyle);
-                Cell c10= dataRow.createCell(3);c10.setCellValue(rate);c10.setCellStyle(currencyStyle);
-                Cell c11= dataRow.createCell(4);c11.setCellValue(horas);c11.setCellStyle(bodyStyle);
-                Cell c12= dataRow.createCell(5);c12.setCellValue(facturacion);c12.setCellStyle(currencyStyle);
+                Cell c7 = dataRow.createCell(0);c7.setCellValue("Italy");c7.setCellStyle(bodyStyle);
+                Cell c8 = dataRow.createCell(1);c8.setCellValue("INS-026696-00003");c8.setCellStyle(bodyStyle);
+                Cell c9 = dataRow.createCell(2);c9.setCellValue(group);c9.setCellStyle(bodyStyle);
+                Cell c10 = dataRow.createCell(3);c10.setCellValue(rate);c10.setCellStyle(currencyStyle);
+                Cell c11 = dataRow.createCell(4);c11.setCellValue(horas);c11.setCellStyle(bodyStyle);
+                Cell c12 = dataRow.createCell(5);c12.setCellValue(facturacion);c12.setCellStyle(currencyStyle);
             }
             Row totalRow = sheet.createRow(rowNum++);
             Cell c13= totalRow.createCell(4);c13.setCellValue("Total");c13.setCellStyle(headerStyle);

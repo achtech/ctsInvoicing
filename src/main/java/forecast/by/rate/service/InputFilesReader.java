@@ -26,7 +26,7 @@ public class InputFilesReader {
                 if (row.getRowNum() == 0) continue; // Skip header
                 InputRowProcessor.RowData result = rowProcessor.processRow(row);
                 if (result != null) {
-                    aggregator.addHoras(result.getGroup(), result.getUser(), result.getHoras());
+                    aggregator.add(result.getGroup(), result.getUser(), result.getHoras(), result.getFacturacion());
                 }
             }
         }

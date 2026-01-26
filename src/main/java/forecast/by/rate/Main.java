@@ -53,6 +53,9 @@ public class Main {
                 filesReader.processFile(inputFile.getAbsolutePath());
             }
 
+            // Print raw data grouped by user
+            rowProcessor.printRawRates();
+
             OutputWriter writer = new OutputWriter(referenceData, aggregator);
             writer.write(outputPath);
 

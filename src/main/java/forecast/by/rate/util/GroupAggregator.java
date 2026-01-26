@@ -6,23 +6,32 @@ import java.util.Map;
 
 public class GroupAggregator {
     private final Map<String, Map<String, Double>> groupToUserHoras = new HashMap<>();
+    private final Map<String, Map<String, Double>> groupToUserFacturacion = new HashMap<>();
 
-    public void addHoras(String group, String user, double horas) {
-        Map<String, Double> userMap = groupToUserHoras.get(group);
-        if (userMap == null) {
-            userMap = new HashMap<>();
-            groupToUserHoras.put(group, userMap);
-        }
-        Double current = userMap.get(user);
-        if (current == null) {
-            current = 0.0;
-        }
-        userMap.put(user, current + horas);
+    public void add(String group, String user, double horas, double facturacion) {
+        // Aggregate Hours
+        groupToUserHoras
+            .computeIfAbsent(group, k -> new HashMap<>())
+            .merge(user, horas, Double::sum);
+
+        // Aggregate Facturacion
+        groupToUserFacturacion
+            .computeIfAbsent(group, k -> new HashMap<>())
+            .merge(user, facturacion, Double::sum);
     }
 
     public Map<String, Map<String, Double>> getAggregates() {
+        // Return hours aggregates (keeping existing signature/behavior for compatibility if needed)
         Map<String, Map<String, Double>> copy = new HashMap<>();
         for (Map.Entry<String, Map<String, Double>> e : groupToUserHoras.entrySet()) {
+            copy.put(e.getKey(), new HashMap<>(e.getValue()));
+        }
+        return copy;
+    }
+
+    public Map<String, Map<String, Double>> getFacturacionAggregates() {
+        Map<String, Map<String, Double>> copy = new HashMap<>();
+        for (Map.Entry<String, Map<String, Double>> e : groupToUserFacturacion.entrySet()) {
             copy.put(e.getKey(), new HashMap<>(e.getValue()));
         }
         return copy;

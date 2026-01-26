@@ -252,6 +252,9 @@ public class UnifiedMain extends JFrame {
                         }
                     }
 
+                    // Print raw data grouped by user
+                    rowProcessor.printRawRates();
+
                     if (!aggregator.getAggregates().isEmpty()) {
                         OutputWriter writer = new OutputWriter(referenceData, aggregator);
                         String rateOutput = new File(targetDir, "Consolidated_Rate_Report.xlsx").getAbsolutePath();
@@ -471,6 +474,9 @@ public class UnifiedMain extends JFrame {
                         log("Processing: " + f.getName());
                         filesReader.processFile(f.getAbsolutePath());
                     }
+                    
+                    // Print raw data grouped by user
+                    rowProcessor.printRawRates();
 
                     OutputWriter writer = new OutputWriter(referenceData, aggregator);
                     writer.write(outputField.getText());

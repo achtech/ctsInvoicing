@@ -41,7 +41,6 @@ public class RateTable {
         rateMap.put(25.0, "Guardias 25");
         rateMap.put(50.0, "Guardias 50");
 
-
         exactRateMap = new java.util.HashMap<>();
         exactRateMap.put(6.40, 6.39768);
         exactRateMap.put(9.36, 9.36472);
@@ -75,9 +74,8 @@ public class RateTable {
 //        exactRateMap.put(41.72, "APP-PM-13");
 //        exactRateMap.put(42.65, "APP-DEV-13");
 //        exactRateMap.put(46.36, "APP-DA-13");
-        exactRateMap.put(25.0, 24.999);
-
-
+        exactRateMap.put(25.0, 25.0);
+        exactRateMap.put(50.0, 50.0);
     }
 
     public static String getCategory(double approximateRate) {

@@ -6,9 +6,6 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 
-import java.util.AbstractMap;
-import java.util.Map;
-
 public class InputRowProcessor {
 
     private final ReferenceData referenceData;
@@ -18,10 +15,10 @@ public class InputRowProcessor {
     }
 
     /**
-     * Processes one row from input file and returns the identified Grupo and corrected Horas.
+     * Processes one row from input file and returns the identified Grupo, user and corrected Horas.
      * Returns null if employee cannot be identified.
      */
-    public Map.Entry<String, Double> processRow(Row row) {
+    public RowData processRow(Row row) {
         if (row == null) return null;
 
         String employeeNumber = getStringCellValue(row.getCell(0));  // Column A
@@ -70,16 +67,14 @@ public class InputRowProcessor {
 
         Double correctRate = referenceData.getRateByGroup(group);
         if (correctRate == null || correctRate < 0) {
-            return null; // Invalid group/rate
+            return null;
         }
 
         double finalHoras = reportedHoras;
 
-        // 4. CORRECT HOURS: only when identified by name (no number) AND rate mismatch
-        // This preserves the monetary value: Horas × Rate = constant
         if (identifiedByNameOnly
                 && (employeeNumber == null || employeeNumber.isBlank())
-                && Math.abs(reportedRate - correctRate) > 0.001 // tolerance
+                && Math.abs(reportedRate - correctRate) > 0.001
                 && reportedRate > 0) {
 
             finalHoras = (reportedHoras * reportedRate) / correctRate;
@@ -87,10 +82,43 @@ public class InputRowProcessor {
 
         if("Tools".equals(group))
             finalHoras = facturation;
-        return new AbstractMap.SimpleEntry<>(group.trim(), finalHoras);
+
+        String user;
+        if (isNotBlank(employeeNumber)) {
+            user = employeeNumber.trim();
+        } else if (isNotBlank(nameCellContent)) {
+            user = nameCellContent.trim();
+        } else {
+            user = "";
+        }
+
+        return new RowData(group.trim(), user, finalHoras);
     }
 
-    // ──────── Helper Methods ────────
+    public static class RowData {
+        private final String group;
+        private final String user;
+        private final double horas;
+
+        public RowData(String group, String user, double horas) {
+            this.group = group;
+            this.user = user;
+            this.horas = horas;
+        }
+
+        public String getGroup() {
+            return group;
+        }
+
+        public String getUser() {
+            return user;
+        }
+
+        public double getHoras() {
+            return horas;
+        }
+    }
+
 
     private static boolean isNotBlank(String str) {
         return str != null && !str.trim().isEmpty();

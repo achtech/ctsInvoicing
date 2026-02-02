@@ -8,7 +8,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import java.util.Map;
 
 public class InputFilesReader {
     private final InputRowProcessor rowProcessor;
@@ -25,9 +24,9 @@ public class InputFilesReader {
             Sheet sheet = wb.getSheetAt(0); // Assuming data is in the first sheet
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Skip header
-                Map.Entry<String, Double> result = rowProcessor.processRow(row);
+                InputRowProcessor.RowData result = rowProcessor.processRow(row);
                 if (result != null) {
-                    aggregator.addHoras(result.getKey(), result.getValue());
+                    aggregator.addHoras(result.getGroup(), result.getUser(), result.getHoras());
                 }
             }
         }

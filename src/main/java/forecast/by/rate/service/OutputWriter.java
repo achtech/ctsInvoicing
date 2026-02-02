@@ -32,10 +32,13 @@ public class OutputWriter {
 
                 if (rate == null) continue;
 
+                // Console output moved to InputRowProcessor to show raw data before changes
+                /*
                 for (Map.Entry<String, Double> userEntry : groupEntry.getValue().entrySet()) {
                     String user = userEntry.getKey();
                     System.out.println("Group: " + group + " | User: " + user + " | Rate: " + rate);
                 }
+                */
             }
 
             Sheet sheet = wb.createSheet("Consolidated");
@@ -60,7 +63,23 @@ public class OutputWriter {
                     horas += h;
                 }
 
-                double facturacion = !("Tools".equals(group)) ? rate * horas : horas;
+                // Retrieve pre-calculated Facturacion from aggregator (uses formula: hours * rate / initial_rate)
+                // UPDATE: User requested formula change: (hours * rate from input) / rate from table
+                // However, user feedback indicates they expect REVENUE (Money), not Adjusted Hours.
+                // The previous formula (Revenue / Rate) resulted in Hours (e.g., 94.00€).
+                // To get Revenue, we should just use the aggregated Input Revenue.
+                double facturacion = 0;
+                double aggregatedInputRevenue = 0;
+                Map<String, Double> usersFacturacion = aggregator.getFacturacionAggregates().get(group);
+                if (usersFacturacion != null) {
+                    for (Double f : usersFacturacion.values()) {
+                        aggregatedInputRevenue += f;
+                    }
+                }
+                
+                // Use the aggregated revenue directly (Input Hours * Input Rate)
+                facturacion = aggregatedInputRevenue;
+                
                 total += facturacion;
 
                 Row dataRow = sheet.createRow(rowNum++);

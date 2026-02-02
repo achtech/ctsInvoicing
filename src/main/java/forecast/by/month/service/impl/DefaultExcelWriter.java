@@ -17,11 +17,11 @@ import java.util.stream.Collectors;
 public class DefaultExcelWriter implements ExcelWriter {
 
     @Override
-    public Workbook createWorkbookWithSheets(String currentMonthName, String nextMonthName, String nextNextMonthName) {
+    public Workbook createWorkbookWithSheets(List<String> monthNames) {
         Workbook workbook = new XSSFWorkbook();
-        workbook.createSheet("Service Hours Details " + currentMonthName);
-        workbook.createSheet("Service Hours Details " + nextMonthName);
-        workbook.createSheet("Service Hours Details " + nextNextMonthName);
+        for (String monthName : monthNames) {
+            workbook.createSheet("Service Hours Details " + monthName);
+        }
         return workbook;
     }
 

@@ -284,19 +284,21 @@ public class Utils {
     }
 
     public static Double getRates(String input) {
-        String[] parts = input.split(" > ");
-        String[] lastSectionParts = parts[parts.length - 1].split(" - ", 2);
-        String[] currencyParts = lastSectionParts[1].split("/");
-        String result = currencyParts[1].replace(" EUR", "").replace(",", ".").trim();
-        result = result.contains(" (Operative)") ? result.replace(" (Operative)","") : result.contains(" (Ajuste)") ? result.replace(" (Ajuste)","") : result;
-        result = result.contains(" - Operativa") ? result.replace(" - Operativa","") : result.contains(" (Ajuste)") ? result.replace(" (Ajuste)","") : result;
-        result = result.contains(" - Operative") ? result.replace(" - Operative","") : result.contains(" (Ajuste)") ? result.replace(" (Ajuste)","") : result;
-        try {
-            return Double.parseDouble(result);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Failed to parse EUR value: " + result, e);
-        }
+    String[] parts = input.split(" > ");
+    String[] lastSectionParts = parts[parts.length - 1].split(" - ", 2);
+    String[] currencyParts = lastSectionParts[1].split("/");
+    String oldRate = currencyParts.length == 1 ?currencyParts[0] : currencyParts[1];
+    String result = oldRate.replace(" EUR", "").replace(",", ".").trim();
+    result = result.contains(" (Operative)") ? result.replace(" (Operative)","") : result.contains(" (Ajuste)") ? result.replace(" (Ajuste)","") : result;
+    result = result.contains(" - Operativa") ? result.replace(" - Operativa","") : result.contains(" (Ajuste)") ? result.replace(" (Ajuste)","") : result;
+    result = result.contains(" - Operative") ? result.replace(" - Operative","") : result.contains(" (Ajuste)") ? result.replace(" (Ajuste)","") : result;
+    result = result.contains("Tarifa ") ? result.replace("Tarifa ","") : result;
+    try {
+        return Double.parseDouble(result);
+    } catch (NumberFormatException e) {
+        throw new IllegalArgumentException("Failed to parse EUR value: " + result, e);
     }
+}
 
     public static String getColumnLetter(int columnIndex) {
         StringBuilder columnLetter = new StringBuilder();

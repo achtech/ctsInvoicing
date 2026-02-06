@@ -73,12 +73,12 @@ public class ExecuteService {
                 // Collect month names for this run
                 List<String> monthNames = new ArrayList<>();
                 for (int i = 0; i < monthsToProcess; i++) {
-                    monthNames.add(dateProvider.getMonthNameEnglish(currentDate.plusMonths(i)));
+                    monthNames.add(dateProvider.getMonthNameEnglish(currentDate.minusMonths(i)));
                 }
 
                 try (Workbook outputWorkbook = excelWriter.createWorkbookWithSheets(monthNames)) {
                     for (int i = 0; i < monthsToProcess; i++) {
-                        LocalDate dateForSheet = currentDate.plusMonths(i);
+                        LocalDate dateForSheet = currentDate.minusMonths(i);
                         String monthNameEng = dateProvider.getMonthNameEnglish(dateForSheet);
                         String monthNameSpa = dateProvider.getMonthNameSpanish(dateForSheet);
 

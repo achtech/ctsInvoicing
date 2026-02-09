@@ -74,8 +74,8 @@ public class RateTable {
 //        exactRateMap.put(41.72, "APP-PM-13");
 //        exactRateMap.put(42.65, "APP-DEV-13");
 //        exactRateMap.put(46.36, "APP-DA-13");
-        exactRateMap.put(25.0, 25.0);
-        exactRateMap.put(50.0, 50.0);
+        exactRateMap.put(25.0, 24.38172);
+        exactRateMap.put(50.0, 48.76344);
     }
 
     public static String getCategory(double approximateRate) {

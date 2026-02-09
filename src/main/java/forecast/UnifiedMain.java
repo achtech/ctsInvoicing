@@ -225,11 +225,9 @@ public class UnifiedMain extends JFrame {
             // Create Main Output Folder
             java.time.LocalDateTime now = java.time.LocalDateTime.now();
             java.time.format.DateTimeFormatter monthFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM_yyyy");
-            // Timestamp format updated as per user request: "your_month_day_h_min_sec" (yyyy_MM_dd_HH_mm_ss)
-            java.time.format.DateTimeFormatter tsFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm_ss");
             
             String currentMonthStr = now.format(monthFormatter);
-            String mainFolderName = "forecast_italy_" + currentMonthStr + "_" + now.format(tsFormatter);
+            String mainFolderName = "forecast_italy_" + currentMonthStr ;
             File mainOutputFolder = new File(targetDir, mainFolderName);
             if (!mainOutputFolder.exists()) {
                 mainOutputFolder.mkdirs();
@@ -280,7 +278,8 @@ public class UnifiedMain extends JFrame {
 
                     if (!aggregator.getAggregates().isEmpty()) {
                         OutputWriter writer = new OutputWriter(referenceData, aggregator);
-                        String rateOutput = new File(rateFolder, "Consolidated_Rate_Report.xlsx").getAbsolutePath();
+                        String fullMonthName = now.format(java.time.format.DateTimeFormatter.ofPattern("MMMM"));
+                        String rateOutput = new File(rateFolder, "Rate Forecast " + fullMonthName + ".xlsx").getAbsolutePath();
                         writer.write(rateOutput);
                         log("  > Rate Report created: " + rateOutput);
                     } else {

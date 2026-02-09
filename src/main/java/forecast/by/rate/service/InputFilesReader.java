@@ -21,7 +21,7 @@ public class InputFilesReader {
     public void processFile(String filePath) throws IOException {
         try (FileInputStream fis = new FileInputStream(filePath);
              Workbook wb = new XSSFWorkbook(fis)) {
-            Sheet sheet = wb.getSheetAt(0); // Assuming data is in the first sheet
+            Sheet sheet = findSheet(wb); 
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Skip header
                 InputRowProcessor.RowData result = rowProcessor.processRow(row);
@@ -30,5 +30,22 @@ public class InputFilesReader {
                 }
             }
         }
+    }
+
+    private Sheet findSheet(Workbook wb) {
+        String currentMonth = java.time.LocalDate.now().getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.forLanguageTag("es-ES"));
+        
+        Sheet match = null;
+        for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+            Sheet s = wb.getSheetAt(i);
+            String name = s.getSheetName();
+            if (name.toLowerCase().contains("facturaci\u00F3n") && name.toLowerCase().contains(currentMonth.toLowerCase())) {
+                return s;
+            }
+            if (match == null && name.toLowerCase().contains("facturaci\u00F3n")) {
+                match = s;
+            }
+        }
+        return match != null ? match : wb.getSheetAt(0);
     }
 }

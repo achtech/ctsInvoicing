@@ -23,33 +23,6 @@ public class ExcelReader {
         public  CellStyle getStyle() {return style;}
     }
 
-    public List<String> extractColumnBBlueValues(File file) throws Exception {
-        List<String> result = new ArrayList<>();
-
-        try (FileInputStream fis = new FileInputStream(file);
-             Workbook wb = new XSSFWorkbook(fis)) {
-
-            Sheet sheet = findSheet(wb);
-
-            for (Row row : sheet) {
-                Cell cell = row.getCell(1); // Column B
-
-                if (cell == null) continue;
-
-                String text = cell.getStringCellValue().trim();
-                if (text.isEmpty()) continue;
-
-                CellStyle style = cell.getCellStyle();
-                Color bgColor = style.getFillForegroundColorColor();
-
-                if (bgColor != null) {
-                    result.add(text);
-                }
-            }
-        }
-        return result;
-    }
-
     public List<ServiceTeamRaw> extractRawServiceTeams(File file) throws Exception {
         List<ServiceTeamRaw> result = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(file);
@@ -108,6 +81,7 @@ public class ExcelReader {
                 result.add(new ServiceTeamRaw(currentLabel, lastCost, lastStyle));
             }
         }
+        result.removeIf(item -> item.getLabel() == null || item.getLabel().trim().isEmpty());
         return result;
     }
 

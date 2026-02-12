@@ -53,8 +53,7 @@ public class ExecuteService {
             System.err.println("Error: File is not an Excel file (.xlsx or .xls): " + file.getAbsolutePath());
             return;
         }
-        try (FileInputStream fis = new FileInputStream(file);
-             Workbook inputWorkbook = new XSSFWorkbook(fis)) {
+        try (Workbook inputWorkbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(file)) {
 
 
             LocalDate currentDate = dateProvider.getCurrentDate(inputExcelFilePath);

@@ -22,12 +22,18 @@ public class DefaultDateProvider implements DateProvider {
 
     @Override
     public LocalDate getCurrentDate(String path) {
-        System.out.println(path);
-        String fileName = path.substring(path.lastIndexOf("\\") + 1);
-        String[] dates = fileName.split("-");
-        int year = Integer.parseInt(dates[0]);
-        int month = Integer.parseInt(dates[1]);
-        return LocalDate.of(year, month, 1);
+        try {
+            String fileName = path.substring(path.lastIndexOf("\\") + 1);
+            if (fileName.matches("^\\d{4}-\\d{2}-.*")) {
+                String[] dates = fileName.split("-");
+                int year = Integer.parseInt(dates[0]);
+                int month = Integer.parseInt(dates[1]);
+                return LocalDate.of(year, month, 1);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to parse date from filename, defaulting to current date: " + e.getMessage());
+        }
+        return LocalDate.now().withDayOfMonth(1);
     }
 
     @Override

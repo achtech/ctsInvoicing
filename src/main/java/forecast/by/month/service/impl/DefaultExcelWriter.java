@@ -25,9 +25,33 @@ public class DefaultExcelWriter implements ExcelWriter {
         return workbook;
     }
 
+    private Sheet getSheetResilient(Workbook workbook, String sheetName) {
+        if (workbook == null || sheetName == null) return null;
+        
+        // Try direct match first
+        Sheet sheet = workbook.getSheet(sheetName);
+        if (sheet != null) return sheet;
+
+        // Try normalized match (handle accents and case)
+        String searchName = normalize(sheetName.toLowerCase());
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            String currentName = normalize(workbook.getSheetName(i).toLowerCase());
+            if (currentName.equals(searchName)) {
+                return workbook.getSheetAt(i);
+            }
+        }
+        return null;
+    }
+
+    private String normalize(String str) {
+        if (str == null) return "";
+        return str.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u");
+    }
+
     private List<Row> getAdjustmentSheetData(Workbook inputWorkbook, String ajustesSheetName, String serviceTeam, int month) {
-        Sheet inputSheet = inputWorkbook.getSheet(ajustesSheetName);
+        Sheet inputSheet = getSheetResilient(inputWorkbook, ajustesSheetName);
         List<Row> rows = new ArrayList<>();
+        if (inputSheet == null) return rows;
         // Copy data rows where column E matches serviceTeam
         for (Row inputRow : inputSheet) {
             if (inputRow.getRowNum() == 0) {
@@ -47,7 +71,7 @@ public class DefaultExcelWriter implements ExcelWriter {
     public void copyServiceHoursSheetData(Workbook inputWorkbook, Workbook outputWorkbook, String serviceTeam,
                                           String invoicingSheetNameES, String invoicingSheetName, String ajustesSheetName, String facturacionSheetName) {
         // TODO Auto-generated method stub
-        Sheet inputSheet = inputWorkbook.getSheet(invoicingSheetNameES);
+        Sheet inputSheet = getSheetResilient(inputWorkbook, invoicingSheetNameES);
         Sheet outputSheet = outputWorkbook.getSheet(invoicingSheetName);
         if (inputSheet == null || outputSheet == null) {
             System.err.println("Skipping invoicing details sheet: input or output sheet not found.");
@@ -401,7 +425,7 @@ public class DefaultExcelWriter implements ExcelWriter {
     }
 
     public Double getTotalServiceTeam(Workbook inputWorkbook, String serviceTeam, String sheetName){
-        Sheet sheet = inputWorkbook.getSheet(sheetName);
+        Sheet sheet = getSheetResilient(inputWorkbook, sheetName);
         FormulaEvaluator evaluator = inputWorkbook.getCreationHelper().createFormulaEvaluator();
         if (sheet == null) return 0.0;
 
@@ -432,7 +456,7 @@ public class DefaultExcelWriter implements ExcelWriter {
     }
 
     public Double getExactValueFromSheet(Workbook inputWorkbook, String sheetName, String rowDescription, int column){
-        Sheet sheet = inputWorkbook.getSheet(sheetName);
+        Sheet sheet = getSheetResilient(inputWorkbook, sheetName);
         FormulaEvaluator evaluator = inputWorkbook.getCreationHelper().createFormulaEvaluator();
         if (sheet == null) return 0.0;
 

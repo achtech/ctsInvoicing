@@ -98,6 +98,7 @@ public class UnifiedMain extends JFrame {
         private final JList<File> inputFilesList = new JList<>(inputFilesModel);
         private final JTextField targetDirField = new JTextField();
         private final JSpinner monthsSpinner = new JSpinner(new SpinnerNumberModel(3, 1, 12, 1));
+        private final JCheckBox monthsToggle = new JCheckBox("Enable", true);
         private final JTextArea logArea = new JTextArea();
 
         public AllInOnePanel() {
@@ -161,6 +162,13 @@ public class UnifiedMain extends JFrame {
             }
             JPanel spinnerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
             spinnerPanel.setOpaque(false);
+            
+            monthsToggle.setOpaque(false);
+            monthsToggle.setFont(MAIN_FONT);
+            monthsToggle.addActionListener(e -> monthsSpinner.setEnabled(monthsToggle.isSelected()));
+            spinnerPanel.add(monthsToggle);
+            spinnerPanel.add(Box.createHorizontalStrut(10));
+            
             spinnerPanel.add(monthsSpinner);
             configPanel.add(spinnerPanel, gbc);
 
@@ -245,6 +253,7 @@ public class UnifiedMain extends JFrame {
 
             // Months value from spinner
             int months = (Integer) monthsSpinner.getValue();
+            boolean useManualMonths = monthsToggle.isSelected();
             List<File> inputs = new ArrayList<>();
             for(int i=0; i<inputFilesModel.size(); i++) inputs.add(inputFilesModel.get(i));
 
@@ -330,9 +339,26 @@ public class UnifiedMain extends JFrame {
                 try {
                     log("\n[3/3] Running Forecast By Month...");
                     for (File f : inputs) {
+                        // Only process files that are meant for the Month module
+                        String fileName = f.getName().toLowerCase();
+                        if (!fileName.contains("forecast it") || (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls"))) {
+                            log("  - Skipping " + f.getName() + " (not a ForeCast IT Excel file)");
+                            continue;
+                        }
+
                         try {
-                            log("  - Processing " + f.getName() + " with " + months + " months...");
-                            ExecuteService.executeScript(f.getAbsolutePath(), monthFolder.getAbsolutePath(), months);
+                            int currentMonths = months;
+                            if (!useManualMonths) {
+                                int detected = countMonthSheets(f);
+                                if (detected > 0) {
+                                    currentMonths = detected;
+                                    log("  - Auto-detected months for " + f.getName() + ": " + currentMonths);
+                                } else {
+                                    log("  - Warning: No 'Facturación Month' sheets found in " + f.getName() + ". Using default: " + months);
+                                }
+                            }
+                            log("  - Processing " + f.getName() + " with " + currentMonths + " months...");
+                            ExecuteService.executeScript(f.getAbsolutePath(), monthFolder.getAbsolutePath(), currentMonths);
                         } catch (Exception e) {
                             log("  - Month Warning: Failed to process " + f.getName() + ": " + e.getMessage());
                         }
@@ -348,6 +374,22 @@ public class UnifiedMain extends JFrame {
         }
 
 
+        private int countMonthSheets(File f) {
+            int count = 0;
+            try (org.apache.poi.ss.usermodel.Workbook workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(f)) {
+                for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                    String name = workbook.getSheetName(i).toLowerCase();
+                    // Normalize name to handle accents and case
+                    String normalized = name.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u");
+                    if (normalized.contains("facturacion")) {
+                        count++;
+                    }
+                }
+            } catch (Exception e) {
+                log("  - Error counting sheets in " + f.getName() + ": " + e.getMessage());
+            }
+            return count;
+        }
     }
 
 

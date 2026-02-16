@@ -99,6 +99,8 @@ public class UnifiedMain extends JFrame {
         private final JTextField targetDirField = new JTextField();
         private final JSpinner monthsSpinner = new JSpinner(new SpinnerNumberModel(3, 1, 12, 1));
         private final JCheckBox monthsToggle = new JCheckBox("Enable", true);
+        private final JLabel inputErrorLabel = new JLabel();
+        private final JLabel outputErrorLabel = new JLabel();
         private final JTextArea logArea = new JTextArea();
 
         public AllInOnePanel() {
@@ -134,13 +136,38 @@ public class UnifiedMain extends JFrame {
             configPanel.add(listScroll, gbc);
             gbc.ipady = 0;
 
-            // Row 2: Target Directory
+            // Row 2: Input error message
+            gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+            gbc.fill = GridBagConstraints.HORIZONTAL;
+            inputErrorLabel.setForeground(new Color(192, 57, 43));
+            inputErrorLabel.setFont(MAIN_FONT.deriveFont(Font.BOLD, 12f));
+            inputErrorLabel.setText("");
+            configPanel.add(inputErrorLabel, gbc);
+
+            // Row 3: File actions (add/remove/clear)
+            gbc.fill = GridBagConstraints.NONE;
+            gbc.weighty = 0;
+            gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
+            JPanel fileButtonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+            fileButtonsPanel.setOpaque(false);
+            JButton addBtn = createStyledButton("Add Files");
+            addBtn.addActionListener(e -> selectInputs());
+            JButton removeBtn = createStyledButton("Remove Selected");
+            removeBtn.addActionListener(e -> removeSelectedInputs());
+            JButton clearBtn = createStyledButton("Clear All");
+            clearBtn.addActionListener(e -> clearInputs());
+            fileButtonsPanel.add(addBtn);
+            fileButtonsPanel.add(removeBtn);
+            fileButtonsPanel.add(clearBtn);
+            configPanel.add(fileButtonsPanel, gbc);
+
+            // Row 4: Target Directory
             gbc.fill = GridBagConstraints.HORIZONTAL;
             gbc.weighty = 0;
-            gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 1;
+            gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 1;
             configPanel.add(new JLabel("Target Output Directory:"), gbc);
 
-            gbc.gridx = 1; gbc.gridy = 2;
+            gbc.gridx = 1; gbc.gridy = 4;
             JPanel dirPanel = new JPanel(new BorderLayout(10, 0));
             dirPanel.setOpaque(false);
             targetDirField.setEditable(false);
@@ -150,11 +177,18 @@ public class UnifiedMain extends JFrame {
             dirPanel.add(selectTargetBtn, BorderLayout.EAST);
             configPanel.add(dirPanel, gbc);
 
-            // Row 3: Months Spinner (Restored)
-            gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0;
+            // Row 5: Output error message
+            gbc.gridx = 0; gbc.gridy = 5; gbc.gridwidth = 2;
+            outputErrorLabel.setForeground(new Color(192, 57, 43));
+            outputErrorLabel.setFont(MAIN_FONT.deriveFont(Font.BOLD, 12f));
+            outputErrorLabel.setText("");
+            configPanel.add(outputErrorLabel, gbc);
+
+            // Row 6: Months Spinner (Restored)
+            gbc.gridx = 0; gbc.gridy = 6; gbc.weightx = 0;
             configPanel.add(new JLabel("Forecast Months (for Month Module):"), gbc);
 
-            gbc.gridx = 1; gbc.gridy = 3; gbc.weightx = 1.0;
+            gbc.gridx = 1; gbc.gridy = 6; gbc.weightx = 1.0;
             // Style the spinner a bit
             JComponent editor = monthsSpinner.getEditor();
             if (editor instanceof JSpinner.DefaultEditor) {
@@ -172,8 +206,8 @@ public class UnifiedMain extends JFrame {
             spinnerPanel.add(monthsSpinner);
             configPanel.add(spinnerPanel, gbc);
 
-            // Row 4: Execute
-            gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
+            // Row 7: Execute
+            gbc.gridx = 0; gbc.gridy = 7; gbc.gridwidth = 2;
             gbc.fill = GridBagConstraints.NONE;
             gbc.anchor = GridBagConstraints.CENTER;
             JButton runBtn = createStyledButton("RUN ALL PROCESSES");
@@ -203,6 +237,20 @@ public class UnifiedMain extends JFrame {
             }
         }
 
+        private void removeSelectedInputs() {
+            java.util.List<File> selected = inputFilesList.getSelectedValuesList();
+            if (selected == null || selected.isEmpty()) {
+                return;
+            }
+            for (File f : selected) {
+                inputFilesModel.removeElement(f);
+            }
+        }
+
+        private void clearInputs() {
+            inputFilesModel.clear();
+        }
+
         private void selectTarget() {
             JFileChooser chooser = new JFileChooser();
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -219,10 +267,19 @@ public class UnifiedMain extends JFrame {
         }
 
         private void runAll() {
-            if (inputFilesModel.isEmpty() || targetDirField.getText().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Please select input files and output directory.", "Warning", JOptionPane.WARNING_MESSAGE);
-                return;
+            inputErrorLabel.setText("");
+            outputErrorLabel.setText("");
+
+            boolean hasError = false;
+            if (inputFilesModel.isEmpty()) {
+                inputErrorLabel.setText("Please add at least one input Excel file.");
+                hasError = true;
             }
+            if (targetDirField.getText().isEmpty()) {
+                outputErrorLabel.setText("Please select an output directory.");
+                hasError = true;
+            }
+            if (hasError) return;
 
             File targetDir = new File(targetDirField.getText());
             if (!targetDir.exists() || !targetDir.isDirectory()) {

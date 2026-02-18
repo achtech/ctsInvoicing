@@ -98,6 +98,9 @@ public class UnifiedMain extends JFrame {
         private final JList<File> inputFilesList = new JList<>(inputFilesModel);
         private final JTextField targetDirField = new JTextField();
         private final JSpinner monthsSpinner = new JSpinner(new SpinnerNumberModel(3, 1, 12, 1));
+        private final JCheckBox monthsToggle = new JCheckBox("Enable", true);
+        private final JLabel inputErrorLabel = new JLabel();
+        private final JLabel outputErrorLabel = new JLabel();
         private final JTextArea logArea = new JTextArea();
 
         public AllInOnePanel() {
@@ -133,13 +136,38 @@ public class UnifiedMain extends JFrame {
             configPanel.add(listScroll, gbc);
             gbc.ipady = 0;
 
-            // Row 2: Target Directory
+            // Row 2: Input error message
+            gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+            gbc.fill = GridBagConstraints.HORIZONTAL;
+            inputErrorLabel.setForeground(new Color(192, 57, 43));
+            inputErrorLabel.setFont(MAIN_FONT.deriveFont(Font.BOLD, 12f));
+            inputErrorLabel.setText("");
+            configPanel.add(inputErrorLabel, gbc);
+
+            // Row 3: File actions (add/remove/clear)
+            gbc.fill = GridBagConstraints.NONE;
+            gbc.weighty = 0;
+            gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
+            JPanel fileButtonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+            fileButtonsPanel.setOpaque(false);
+            JButton addBtn = createStyledButton("Add Files");
+            addBtn.addActionListener(e -> selectInputs());
+            JButton removeBtn = createStyledButton("Remove Selected");
+            removeBtn.addActionListener(e -> removeSelectedInputs());
+            JButton clearBtn = createStyledButton("Clear All");
+            clearBtn.addActionListener(e -> clearInputs());
+            fileButtonsPanel.add(addBtn);
+            fileButtonsPanel.add(removeBtn);
+            fileButtonsPanel.add(clearBtn);
+            configPanel.add(fileButtonsPanel, gbc);
+
+            // Row 4: Target Directory
             gbc.fill = GridBagConstraints.HORIZONTAL;
             gbc.weighty = 0;
-            gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 1;
+            gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 1;
             configPanel.add(new JLabel("Target Output Directory:"), gbc);
 
-            gbc.gridx = 1; gbc.gridy = 2;
+            gbc.gridx = 1; gbc.gridy = 4;
             JPanel dirPanel = new JPanel(new BorderLayout(10, 0));
             dirPanel.setOpaque(false);
             targetDirField.setEditable(false);
@@ -149,11 +177,18 @@ public class UnifiedMain extends JFrame {
             dirPanel.add(selectTargetBtn, BorderLayout.EAST);
             configPanel.add(dirPanel, gbc);
 
-            // Row 3: Months Spinner (Restored)
-            gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0;
+            // Row 5: Output error message
+            gbc.gridx = 0; gbc.gridy = 5; gbc.gridwidth = 2;
+            outputErrorLabel.setForeground(new Color(192, 57, 43));
+            outputErrorLabel.setFont(MAIN_FONT.deriveFont(Font.BOLD, 12f));
+            outputErrorLabel.setText("");
+            configPanel.add(outputErrorLabel, gbc);
+
+            // Row 6: Months Spinner (Restored)
+            gbc.gridx = 0; gbc.gridy = 6; gbc.weightx = 0;
             configPanel.add(new JLabel("Forecast Months (for Month Module):"), gbc);
 
-            gbc.gridx = 1; gbc.gridy = 3; gbc.weightx = 1.0;
+            gbc.gridx = 1; gbc.gridy = 6; gbc.weightx = 1.0;
             // Style the spinner a bit
             JComponent editor = monthsSpinner.getEditor();
             if (editor instanceof JSpinner.DefaultEditor) {
@@ -161,11 +196,18 @@ public class UnifiedMain extends JFrame {
             }
             JPanel spinnerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
             spinnerPanel.setOpaque(false);
+            
+            monthsToggle.setOpaque(false);
+            monthsToggle.setFont(MAIN_FONT);
+            monthsToggle.addActionListener(e -> monthsSpinner.setEnabled(monthsToggle.isSelected()));
+            spinnerPanel.add(monthsToggle);
+            spinnerPanel.add(Box.createHorizontalStrut(10));
+            
             spinnerPanel.add(monthsSpinner);
             configPanel.add(spinnerPanel, gbc);
 
-            // Row 4: Execute
-            gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
+            // Row 7: Execute
+            gbc.gridx = 0; gbc.gridy = 7; gbc.gridwidth = 2;
             gbc.fill = GridBagConstraints.NONE;
             gbc.anchor = GridBagConstraints.CENTER;
             JButton runBtn = createStyledButton("RUN ALL PROCESSES");
@@ -195,6 +237,20 @@ public class UnifiedMain extends JFrame {
             }
         }
 
+        private void removeSelectedInputs() {
+            java.util.List<File> selected = inputFilesList.getSelectedValuesList();
+            if (selected == null || selected.isEmpty()) {
+                return;
+            }
+            for (File f : selected) {
+                inputFilesModel.removeElement(f);
+            }
+        }
+
+        private void clearInputs() {
+            inputFilesModel.clear();
+        }
+
         private void selectTarget() {
             JFileChooser chooser = new JFileChooser();
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -211,10 +267,19 @@ public class UnifiedMain extends JFrame {
         }
 
         private void runAll() {
-            if (inputFilesModel.isEmpty() || targetDirField.getText().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Please select input files and output directory.", "Warning", JOptionPane.WARNING_MESSAGE);
-                return;
+            inputErrorLabel.setText("");
+            outputErrorLabel.setText("");
+
+            boolean hasError = false;
+            if (inputFilesModel.isEmpty()) {
+                inputErrorLabel.setText("Please add at least one input Excel file.");
+                hasError = true;
             }
+            if (targetDirField.getText().isEmpty()) {
+                outputErrorLabel.setText("Please select an output directory.");
+                hasError = true;
+            }
+            if (hasError) return;
 
             File targetDir = new File(targetDirField.getText());
             if (!targetDir.exists() || !targetDir.isDirectory()) {
@@ -225,11 +290,9 @@ public class UnifiedMain extends JFrame {
             // Create Main Output Folder
             java.time.LocalDateTime now = java.time.LocalDateTime.now();
             java.time.format.DateTimeFormatter monthFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM_yyyy");
-            // Timestamp format updated as per user request: "your_month_day_h_min_sec" (yyyy_MM_dd_HH_mm_ss)
-            java.time.format.DateTimeFormatter tsFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm_ss");
             
             String currentMonthStr = now.format(monthFormatter);
-            String mainFolderName = "forecast_italy_" + currentMonthStr + "_" + now.format(tsFormatter);
+            String mainFolderName = "forecast_italy_" + currentMonthStr ;
             File mainOutputFolder = new File(targetDir, mainFolderName);
             if (!mainOutputFolder.exists()) {
                 mainOutputFolder.mkdirs();
@@ -247,6 +310,7 @@ public class UnifiedMain extends JFrame {
 
             // Months value from spinner
             int months = (Integer) monthsSpinner.getValue();
+            boolean useManualMonths = monthsToggle.isSelected();
             List<File> inputs = new ArrayList<>();
             for(int i=0; i<inputFilesModel.size(); i++) inputs.add(inputFilesModel.get(i));
 
@@ -280,7 +344,8 @@ public class UnifiedMain extends JFrame {
 
                     if (!aggregator.getAggregates().isEmpty()) {
                         OutputWriter writer = new OutputWriter(referenceData, aggregator);
-                        String rateOutput = new File(rateFolder, "Consolidated_Rate_Report.xlsx").getAbsolutePath();
+                        String fullMonthName = now.format(java.time.format.DateTimeFormatter.ofPattern("MMMM"));
+                        String rateOutput = new File(rateFolder, "Rate Forecast " + fullMonthName + ".xlsx").getAbsolutePath();
                         writer.write(rateOutput);
                         log("  > Rate Report created: " + rateOutput);
                     } else {
@@ -331,9 +396,26 @@ public class UnifiedMain extends JFrame {
                 try {
                     log("\n[3/3] Running Forecast By Month...");
                     for (File f : inputs) {
+                        // Only process files that are meant for the Month module
+                        String fileName = f.getName().toLowerCase();
+                        if (!fileName.contains("forecast it") || (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls"))) {
+                            log("  - Skipping " + f.getName() + " (not a ForeCast IT Excel file)");
+                            continue;
+                        }
+
                         try {
-                            log("  - Processing " + f.getName() + " with " + months + " months...");
-                            ExecuteService.executeScript(f.getAbsolutePath(), monthFolder.getAbsolutePath(), months);
+                            int currentMonths = months;
+                            if (!useManualMonths) {
+                                int detected = countMonthSheets(f);
+                                if (detected > 0) {
+                                    currentMonths = detected;
+                                    log("  - Auto-detected months for " + f.getName() + ": " + currentMonths);
+                                } else {
+                                    log("  - Warning: No 'Facturación Month' sheets found in " + f.getName() + ". Using default: " + months);
+                                }
+                            }
+                            log("  - Processing " + f.getName() + " with " + currentMonths + " months...");
+                            ExecuteService.executeScript(f.getAbsolutePath(), monthFolder.getAbsolutePath(), currentMonths);
                         } catch (Exception e) {
                             log("  - Month Warning: Failed to process " + f.getName() + ": " + e.getMessage());
                         }
@@ -349,6 +431,22 @@ public class UnifiedMain extends JFrame {
         }
 
 
+        private int countMonthSheets(File f) {
+            int count = 0;
+            try (org.apache.poi.ss.usermodel.Workbook workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(f)) {
+                for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                    String name = workbook.getSheetName(i).toLowerCase();
+                    // Normalize name to handle accents and case
+                    String normalized = name.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u");
+                    if (normalized.contains("facturacion")) {
+                        count++;
+                    }
+                }
+            } catch (Exception e) {
+                log("  - Error counting sheets in " + f.getName() + ": " + e.getMessage());
+            }
+            return count;
+        }
     }
 
 

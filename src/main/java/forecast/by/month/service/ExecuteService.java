@@ -53,8 +53,7 @@ public class ExecuteService {
             System.err.println("Error: File is not an Excel file (.xlsx or .xls): " + file.getAbsolutePath());
             return;
         }
-        try (FileInputStream fis = new FileInputStream(file);
-             Workbook inputWorkbook = new XSSFWorkbook(fis)) {
+        try (Workbook inputWorkbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(file)) {
 
 
             LocalDate currentDate = dateProvider.getCurrentDate(inputExcelFilePath);
@@ -73,12 +72,12 @@ public class ExecuteService {
                 // Collect month names for this run
                 List<String> monthNames = new ArrayList<>();
                 for (int i = 0; i < monthsToProcess; i++) {
-                    monthNames.add(dateProvider.getMonthNameEnglish(currentDate.plusMonths(i)));
+                    monthNames.add(dateProvider.getMonthNameEnglish(currentDate.minusMonths(i)));
                 }
 
                 try (Workbook outputWorkbook = excelWriter.createWorkbookWithSheets(monthNames)) {
                     for (int i = 0; i < monthsToProcess; i++) {
-                        LocalDate dateForSheet = currentDate.plusMonths(i);
+                        LocalDate dateForSheet = currentDate.minusMonths(i);
                         String monthNameEng = dateProvider.getMonthNameEnglish(dateForSheet);
                         String monthNameSpa = dateProvider.getMonthNameSpanish(dateForSheet);
 

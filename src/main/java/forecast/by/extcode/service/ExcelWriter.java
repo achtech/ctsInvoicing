@@ -91,7 +91,10 @@ public class ExcelWriter {
         // -----------------------------------------------------
         // WRITE FILE
         // -----------------------------------------------------
-        File file = new File(targetFolder, "ForeCast IT.xlsx");
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.format.DateTimeFormatter monthFormatter = java.time.format.DateTimeFormatter.ofPattern("MMMM");
+        String currentMonthStr = now.format(monthFormatter);
+        File file = new File(targetFolder, "ForeCast IT "+currentMonthStr+".xlsx");
         FileOutputStream fos = new FileOutputStream(file);
         workbook.write(fos);
         fos.close();

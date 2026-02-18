@@ -29,7 +29,7 @@ public class ExcelReader {
         try (FileInputStream fis = new FileInputStream(file);
              Workbook wb = new XSSFWorkbook(fis)) {
 
-            Sheet sheet = wb.getSheetAt(0);
+            Sheet sheet = findSheet(wb);
 
             for (Row row : sheet) {
                 Cell cell = row.getCell(1); // Column B
@@ -52,11 +52,12 @@ public class ExcelReader {
 
     public List<ServiceTeamRaw> extractRawServiceTeams(File file) throws Exception {
         List<ServiceTeamRaw> result = new ArrayList<>();
-
         try (FileInputStream fis = new FileInputStream(file);
              Workbook wb = new XSSFWorkbook(fis)) {
+            // Sheet sheet = wb.getSheetAt(0) 
+            // Task: Find sheet containing "Facturación" and current month (in Spanish)
+            Sheet sheet = findSheet(wb);
 
-            Sheet sheet = wb.getSheetAt(0);
             FormulaEvaluator evaluator = wb.getCreationHelper().createFormulaEvaluator();
 
             String currentLabel = null;
@@ -108,5 +109,22 @@ public class ExcelReader {
             }
         }
         return result;
+    }
+
+    private Sheet findSheet(Workbook wb) {
+        String currentMonth = java.time.LocalDate.now().getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.forLanguageTag("es-ES"));
+        
+        Sheet match = null;
+        for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+            Sheet s = wb.getSheetAt(i);
+            String name = s.getSheetName();
+            if (name.toLowerCase().contains("facturaci\u00F3n") && name.toLowerCase().contains(currentMonth.toLowerCase())) {
+                return s;
+            }
+            if (match == null && name.toLowerCase().contains("facturaci\u00F3n")) {
+                match = s;
+            }
+        }
+        return match != null ? match : wb.getSheetAt(0);
     }
 }

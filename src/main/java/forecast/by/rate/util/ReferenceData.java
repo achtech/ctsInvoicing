@@ -42,6 +42,13 @@ public class ReferenceData {
                     employeeNameToGroup.put(name, group);
                 }
             }
+            
+            // Add Hardcoded defaults for Guardias
+            groupToRate.put("Guardias-50", 50.0);
+            groupToRate.put("Guardias-25", 25.0);
+            employeeNameToGroup.put("Guardias-50", "Guardias-50");
+            employeeNameToGroup.put("Guardias-25", "Guardias-25");
+            
         }
     }
 
@@ -62,8 +69,9 @@ public class ReferenceData {
     }
 
     public String getGroupByRate(double rate) {
+        double tolerance = 0.001;
         for (Map.Entry<String, Double> entry : groupToRate.entrySet()) {
-            if (entry.getValue() == rate) {
+            if (Math.abs(entry.getValue() - rate) < tolerance) {
                 return entry.getKey();
             }
         }

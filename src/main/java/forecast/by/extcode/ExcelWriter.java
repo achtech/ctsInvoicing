@@ -1,6 +1,6 @@
-package forecast.by.extcode.service;
+package forecast.by.extcode;
 
-import forecast.by.extcode.util.ServiceTeam;
+import forecast.by.util.ServiceTeam;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 

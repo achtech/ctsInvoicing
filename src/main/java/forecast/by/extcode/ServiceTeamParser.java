@@ -1,7 +1,7 @@
-package forecast.by.extcode.service;
+package forecast.by.extcode;
 
-import forecast.by.extcode.util.ServiceTeam;
-import forecast.by.extcode.util.ServiceTeamMaps;
+import forecast.by.util.ServiceTeam;
+import forecast.by.util.ServiceTeamMaps;
 
 import java.util.*;
 

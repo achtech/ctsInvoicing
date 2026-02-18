@@ -1,4 +1,4 @@
-package forecast.by.month.util;
+package forecast.by.month;
 
 import forecast.by.month.service.ExcelFileNameGenerator;
 import org.apache.poi.ss.usermodel.*;
@@ -8,12 +8,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.time.Month;
 import java.time.YearMonth;
 import java.util.Locale;
 
-public class Utils {
+public class Helper {
 
     // Helper method to check if a row is empty
     public static boolean isRowEmpty(Row row) {
@@ -81,7 +81,7 @@ public class Utils {
         // On some Linux systems, the desktop folder might be localized (e.g., "Escritorio" in Spanish)
         // For simplicity, assume "Desktop" (common on Windows, Mac, and most Linux distributions)
 
-        return Paths.get(userHome, desktopFolder).toString();
+        return Path.of(userHome, desktopFolder).toString();
     }
 
     public static CellStyle getCenterStandardStyle(Workbook outputWorkbook) {

@@ -1,9 +1,9 @@
-package forecast.by.rate.service;
+package forecast.by.rate;
 // InputFilesReader.java
 import java.io.FileInputStream;
 import java.io.IOException;
 
-import forecast.by.rate.util.GroupAggregator;
+import forecast.by.util.GroupAggregator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -12,7 +12,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 public class InputFilesReader {
     private final InputRowProcessor rowProcessor;
     private final GroupAggregator aggregator;
-
     public InputFilesReader(InputRowProcessor rowProcessor, GroupAggregator aggregator) {
         this.rowProcessor = rowProcessor;
         this.aggregator = aggregator;
@@ -26,7 +25,7 @@ public class InputFilesReader {
                 if (row.getRowNum() == 0) continue; // Skip header
                 InputRowProcessor.RowData result = rowProcessor.processRow(row);
                 if (result != null) {
-                    aggregator.add(result.getGroup(), result.getUser(), result.getHoras(), result.getFacturacion());
+                    aggregator.add(result.getGroupId(), "user", result.getHours(), result.getCost());
                 }
             }
         }

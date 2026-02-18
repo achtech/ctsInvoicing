@@ -1,4 +1,4 @@
-package forecast.by.extcode.util;
+package forecast.by.util;
 
 import org.apache.poi.ss.usermodel.CellStyle;
 

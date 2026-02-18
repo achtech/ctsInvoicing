@@ -1,7 +1,7 @@
 package forecast.by.month.service;
 
 import forecast.by.month.service.impl.*;
-import forecast.by.month.util.Utils;
+import forecast.by.month.Helper;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -94,7 +94,7 @@ public class ExecuteService {
                     }
                     
                     String outputFileName = fileNameGenerator.generateOutputFileName(currentMonth, currentYear, serviceTeam, outputDirectory);
-                    Utils.writeWorkbook(outputWorkbook, outputFileName);
+                    Helper.writeWorkbook(outputWorkbook, outputFileName);
                 }
             }
         } catch (IOException e) {
@@ -102,7 +102,7 @@ public class ExecuteService {
         }
     }
 
-    public static void executeScript(String inputExcelFilePath, String outputExcelsFilePath, int monthsToProcess) {
+    public static void executeScript(String inputExcelFilePath, String outputExcelsFilePath, int monthsToProcess) throws Exception {
         ExecuteService processor = new ExecuteService(
                 new DefaultDateProvider(),
                 new DefaultExcelFileNameGenerator(),
@@ -114,7 +114,7 @@ public class ExecuteService {
     }
     
     // Overload for backward compatibility if needed, defaulting to 3 months
-    public static void executeScript(String inputExcelFilePath, String outputExcelsFilePath) {
+    public static void executeScript(String inputExcelFilePath, String outputExcelsFilePath) throws Exception {
         executeScript(inputExcelFilePath, outputExcelsFilePath, 3);
     }
 }

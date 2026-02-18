@@ -1,4 +1,4 @@
-package forecast.by.extcode.service;
+package forecast.by.extcode;
 
 import java.io.*;
 import java.util.*;

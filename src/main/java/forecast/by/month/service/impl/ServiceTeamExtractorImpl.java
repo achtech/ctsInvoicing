@@ -18,8 +18,7 @@ public class ServiceTeamExtractorImpl implements ServiceTeamExtractor {
                 CellStyle style = cell.getCellStyle();
                 if (style != null) {
                     Font font = workbook.getFontAt(style.getFontIndexAsInt());
-                    if (font instanceof XSSFFont) {
-                        XSSFFont xssfFont = (XSSFFont) font;
+                    if (font instanceof XSSFFont xssfFont) {
                         XSSFColor color = xssfFont.getXSSFColor();
                         if (color != null && color.getRGB() != null) {
                             byte[] rgb = color.getRGB();

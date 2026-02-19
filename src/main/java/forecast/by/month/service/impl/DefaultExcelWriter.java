@@ -188,8 +188,8 @@ public class DefaultExcelWriter implements ExcelWriter {
             cellC.setCellStyle(centerStyle);
 
             Cell cellD = outputRow.createCell(3);
-            BigDecimal hourlyRate = row.getCell(15).getNumericCellValue();
-            cellD.setCellValue(hourlyRate);
+            BigDecimal hourlyRate = new BigDecimal(row.getCell(15).getNumericCellValue());
+            cellD.setCellValue(hourlyRate.doubleValue());
             cellD.setCellStyle(currencyStyle);
 
             Cell cellE = outputRow.createCell(4);
@@ -207,17 +207,17 @@ public class DefaultExcelWriter implements ExcelWriter {
             Cell cellCost = outputRow.createCell(lastCol + 1);
 
             // Working Hours (from column 12)
-            BigDecimal workingHours = row.getCell(12).getNumericCellValue();
-            cellAdj.setCellValue(workingHours);
+            BigDecimal workingHours = new BigDecimal(row.getCell(12).getNumericCellValue());
+            cellAdj.setCellValue(workingHours.doubleValue());
             cellAdj.setCellStyle(centerStyle);
 
             // **FIXED COST CALCULATION**
-            if (workingHours == 0) {
+            if (workingHours.compareTo(BigDecimal.ZERO) == 0) {
                 // If working hours = 0, use the initial cost value from column 16
                 cellCost.setCellValue(row.getCell(16).getNumericCellValue());
             } else {
                 // If working hours != 0, calculate: hours * hourly rate
-                cellCost.setCellValue(workingHours * hourlyRate);
+                cellCost.setCellValue(workingHours.multiply(hourlyRate).doubleValue());
             }
 
             cellCost.setCellStyle(currencyStyle);
@@ -244,7 +244,7 @@ public class DefaultExcelWriter implements ExcelWriter {
 
         Cell cellTotalCost = lastRow.createCell(lastColumn + 1);
         BigDecimal total = getTotalServiceTeam(inputWorkbook,serviceTeam,facturacionSheetName);
-        cellTotalCost.setCellValue(total);
+        cellTotalCost.setCellValue(total.doubleValue());
         cellTotalCost.setCellStyle(footerCurrencyStyle);
 
         // Auto-size columns after all data is written
@@ -254,28 +254,37 @@ public class DefaultExcelWriter implements ExcelWriter {
     }
 
     private Map<BigDecimal, List<Row>> getAllData(Sheet inputSheet) {
-        List<BigDecimal> ids = new ArrayList<>();
+
         Map<BigDecimal, List<Row>> maps = new HashMap<>();
-        BigDecimal lastId = 0D;
+        BigDecimal lastId = null;
+
         for (Row row : inputSheet) {
+
             Cell empIdCell = row.getCell(0);
             Cell empNameCell = row.getCell(1);
+
             if (empIdCell != null && empNameCell != null) {
-                lastId = empIdCell.getNumericCellValue();
-                ids.add(lastId);
+
+                lastId = BigDecimal.valueOf(empIdCell.getNumericCellValue());
+
                 List<Row> list = new ArrayList<>();
                 list.add(row);
-                maps.put(empIdCell.getNumericCellValue(), list);
-            } else {
-                if (!Helper.isRowEmpty(row) && lastId != 0) {
-                    List<Row> list = maps.get(lastId);
+
+                maps.put(lastId, list);
+
+            } else if (!Helper.isRowEmpty(row) && lastId != null) {
+
+                List<Row> list = maps.get(lastId);
+
+                if (list != null) {
                     list.add(row);
-                    maps.put(lastId, list);
                 }
             }
         }
+
         return maps;
     }
+
 
     private static Map<BigDecimal, List<Row>> filterRowsByServiceTeam(Map<BigDecimal, List<Row>> inputMap, String serviceTeam) {
         Map<BigDecimal, List<Row>> filteredMap = new HashMap<>();
@@ -331,8 +340,8 @@ public class DefaultExcelWriter implements ExcelWriter {
             // Cell 1: Second cell of the first row
             if (!rows.isEmpty() && rows.size() > 1 && rows.get(1) != null && rows.get(1).getCell(1) != null) {
                 Cell secondCellSecond = rows.get(1).getCell(1);
-                BigDecimal input = Helper.getRates(secondCellSecond.getStringCellValue());
-                List<String>  groupsId = CogsHelper.findGroupIdsByRate(new BigDecimal(input), FiscalYear.FY25,recogs);
+                BigDecimal input = BigDecimal.valueOf(Helper.getRates(secondCellSecond.getStringCellValue()));
+                List<String>  groupsId = CogsHelper.findGroupIdsByRate(input, FiscalYear.FY25,recogs);
                 newRow.createCell(2).setCellValue(groupsId.toString());
                // newRow.createCell(2).setCellValue(CogsHelper.getCategory(input));
             }
@@ -341,13 +350,13 @@ public class DefaultExcelWriter implements ExcelWriter {
             CellStyle currencyStyle = Helper.getCurrencyStyle(workbook);
             if (rows.size() > 1 && rows.get(1).getCell(1) != null) {
                 Cell secondCellSecond = rows.get(1).getCell(1);
-                BigDecimal input = Helper.getRates(secondCellSecond.getStringCellValue());
+                BigDecimal input = BigDecimal.valueOf(Helper.getRates(secondCellSecond.getStringCellValue()));
                 String description = rows.getFirst()!=null && rows.getFirst().getCell(1)!=null && CellType.STRING.equals(rows.getFirst().getCell(1).getCellType()) && !rows.getFirst().getCell(1).getStringCellValue().isEmpty() ? rows.getFirst().getCell(1).getStringCellValue():"";
                 Cell thirdCell = newRow.createCell(3);
 
                 if(!description.isEmpty()) {
                     BigDecimal exactRate = getExactValueFromSheet(inputWorkbook, sheetNameEs, description,6);
-                    thirdCell.setCellValue(exactRate);
+                    thirdCell.setCellValue(exactRate.doubleValue());
                 }
                 thirdCell.setCellStyle(currencyStyle);
             }
@@ -372,8 +381,8 @@ public class DefaultExcelWriter implements ExcelWriter {
 
                                 // Evaluate the formula cell to get its numeric value
                                 CellValue cellValue = evaluator.evaluate(hoursCell);
-                                BigDecimal numericValue = cellValue.getNumberValue();
-                                outputCell.setCellValue(numericValue);
+                                BigDecimal numericValue = BigDecimal.valueOf(cellValue.getNumberValue());
+                                outputCell.setCellValue(numericValue.doubleValue());
                                 break;
                             default:
                                 outputCell.setCellValue(hoursCell.getStringCellValue());
@@ -412,9 +421,9 @@ public class DefaultExcelWriter implements ExcelWriter {
     public BigDecimal getTotalServiceTeam(Workbook inputWorkbook, String serviceTeam, String sheetName){
         Sheet sheet = inputWorkbook.getSheet(sheetName);
         FormulaEvaluator evaluator = inputWorkbook.getCreationHelper().createFormulaEvaluator();
-        if (sheet == null) return 0.0;
+        if (sheet == null) return BigDecimal.ZERO;
 
-        BigDecimal total = 0.0;
+        BigDecimal total = BigDecimal.ZERO;
         boolean inProjectBlock = false;
         String projectBlock = "";
         for (Row row : sheet) {
@@ -423,8 +432,8 @@ public class DefaultExcelWriter implements ExcelWriter {
             projectBlock =cell0!=null && CellType.STRING.equals(cell0.getCellType())  && cell0.getStringCellValue() != null && !cell0.getStringCellValue().isEmpty() && cell0.getStringCellValue().equals("Número Empleado") ? projectCell.getStringCellValue() : projectBlock;
             Cell totalCell = row.getCell(7);  // Column H (index 7)
             String project = projectCell !=null ? projectCell.getStringCellValue()!=null ? projectCell.getStringCellValue().trim():"":"";
-            BigDecimal val = totalCell!=null? evaluator.evaluate(totalCell).getNumberValue() : 0;
-            if(project.isEmpty() && val !=0 && projectBlock.contains(serviceTeam)) {
+            BigDecimal val = totalCell!=null? BigDecimal.valueOf(evaluator.evaluate(totalCell).getNumberValue()) : BigDecimal.ZERO;
+            if(project.isEmpty() && val !=BigDecimal.ZERO && projectBlock.contains(serviceTeam)) {
                 total =  val ;
                 break;
             }
@@ -443,14 +452,16 @@ public class DefaultExcelWriter implements ExcelWriter {
     public BigDecimal getExactValueFromSheet(Workbook inputWorkbook, String sheetName, String rowDescription, int column){
         Sheet sheet = inputWorkbook.getSheet(sheetName);
         FormulaEvaluator evaluator = inputWorkbook.getCreationHelper().createFormulaEvaluator();
-        if (sheet == null) return 0.0;
+        if (sheet == null) return BigDecimal.ZERO;
 
-        BigDecimal exactValue = 0.0;
+        BigDecimal exactValue = BigDecimal.ZERO;
         for (Row row : sheet) {
             Cell cellDescription = row.getCell(1); // Column B (index 1)
             if(cellDescription!=null && CellType.STRING.equals(cellDescription.getCellType())  && cellDescription.getStringCellValue() != null && !cellDescription.getStringCellValue().isEmpty() && cellDescription.getStringCellValue().equals(rowDescription)){
                 Cell cellValue = row.getCell(column);
-                exactValue = cellValue.getNumericCellValue();
+                if (cellValue != null && cellValue.getCellType() == CellType.NUMERIC) {
+                    exactValue = BigDecimal.valueOf(cellValue.getNumericCellValue());
+                }
             }
         }
         return exactValue;

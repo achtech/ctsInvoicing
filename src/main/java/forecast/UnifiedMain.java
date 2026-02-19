@@ -1,16 +1,15 @@
 package forecast;
 
-import forecast.by.rate.service.InputFilesReader;
-import forecast.by.rate.service.InputRowProcessor;
-import forecast.by.rate.service.OutputWriter;
-import forecast.by.rate.util.GroupAggregator;
-import forecast.by.rate.util.ReferenceData;
 
+import forecast.by.extcode.ExcelReader;
+import forecast.by.extcode.ServiceTeamParser;
 import forecast.by.month.service.ExecuteService;
-
-import forecast.by.extcode.service.ExcelReader;
-import forecast.by.extcode.service.ServiceTeamParser;
-import forecast.by.extcode.util.ServiceTeam;
+import forecast.by.rate.InputFilesReader;
+import forecast.by.rate.InputRowProcessor;
+import forecast.by.rate.OutputWriter;
+import forecast.by.util.GroupAggregator;
+import forecast.by.util.ReferenceData;
+import forecast.by.util.ServiceTeam;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -24,21 +23,19 @@ import java.util.List;
 public class UnifiedMain extends JFrame {
 
     // Color Palette
-    private static final Color PRIMARY_COLOR = new Color(41, 128, 185); // Blue
-    private static final Color ACCENT_COLOR = new Color(52, 152, 219); // Lighter Blue
-    private static final Color BG_COLOR = new Color(245, 245, 245); // Light Gray
-    private static final Color TEXT_COLOR = new Color(44, 62, 80); // Dark Blue/Gray
-    private static final Font MAIN_FONT = new Font("Segoe UI", Font.PLAIN, 14);
-    private static final Font HEADER_FONT = new Font("Segoe UI", Font.BOLD, 16);
+    private static final Color PRIMARY_COLOR = new Color(41, 128, 185);
+    private static final Color BG_COLOR      = new Color(245, 245, 245);
+    private static final Color TEXT_COLOR    = new Color(44, 62, 80);
+    private static final Font  MAIN_FONT     = new Font("Segoe UI", Font.PLAIN, 13);
+    private static final Font  HEADER_FONT   = new Font("Segoe UI", Font.BOLD, 14);
 
     public UnifiedMain() {
         setTitle("CTS Invoicing Unified Tool");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1000, 700);
+        setSize(1100, 820);
+        setMinimumSize(new Dimension(900, 700));
         setLocationRelativeTo(null);
         setBackground(BG_COLOR);
-
-        // Just add the All-in-One panel directly
         add(new AllInOnePanel());
     }
 
@@ -57,8 +54,7 @@ public class UnifiedMain extends JFrame {
                 ex.printStackTrace();
             }
         }
-        
-        // Global UI Customization
+
         UIManager.put("Label.font", MAIN_FONT);
         UIManager.put("Button.font", MAIN_FONT);
         UIManager.put("TextField.font", MAIN_FONT);
@@ -72,75 +68,108 @@ public class UnifiedMain extends JFrame {
         btn.setBackground(PRIMARY_COLOR);
         btn.setForeground(Color.WHITE);
         btn.setFocusPainted(false);
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btn.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(PRIMARY_COLOR.darker(), 1),
-                BorderFactory.createEmptyBorder(8, 20, 8, 20)
+                BorderFactory.createEmptyBorder(6, 16, 6, 16)
         ));
         return btn;
     }
 
     private static TitledBorder createTitledBorder(String title) {
         TitledBorder border = BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(Color.GRAY, 1, true),
-                title
-        );
+                BorderFactory.createLineBorder(Color.GRAY, 1, true), title);
         border.setTitleFont(HEADER_FONT);
         border.setTitleColor(TEXT_COLOR);
         return border;
     }
 
     // ==========================================
-    // 0. All-in-One Panel
+    // All-in-One Panel
     // ==========================================
     static class AllInOnePanel extends JPanel {
-        private final DefaultListModel<File> inputFilesModel = new DefaultListModel<>();
-        private final JList<File> inputFilesList = new JList<>(inputFilesModel);
-        private final JTextField targetDirField = new JTextField();
-        private final JSpinner monthsSpinner = new JSpinner(new SpinnerNumberModel(3, 1, 12, 1));
-        private final JTextArea logArea = new JTextArea();
+
+        private final DefaultListModel<File> inputFilesModel  = new DefaultListModel<>();
+        private final JList<File>            inputFilesList   = new JList<>(inputFilesModel);
+        private final JTextField             targetDirField   = new JTextField();
+        private final JSpinner               monthsSpinner    = new JSpinner(new SpinnerNumberModel(3, 1, 12, 1));
+        private final JCheckBox              monthsToggle     = new JCheckBox("Enable", true);
+        private final JLabel                 inputErrorLabel  = new JLabel(" ");
+        private final JLabel                 outputErrorLabel = new JLabel(" ");
+        private final JTextArea              logArea          = new JTextArea();
+
+        // Progress bar + status label
+        private final JProgressBar progressBar = new JProgressBar(0, 3);
+        private final JLabel       statusLabel = new JLabel("Ready");
+
+        // Run button kept as field so we can disable/re-enable it
+        private final JButton runBtn = createStyledButton("RUN ALL PROCESSES");
+
+        private static final String HISTORY_PATH = "ctsInvoicing/src/main/resources/history.csv";
 
         public AllInOnePanel() {
-            setLayout(new BorderLayout(15, 15));
-            setBorder(new EmptyBorder(20, 20, 20, 20));
+            setLayout(new BorderLayout(10, 10));
+            setBorder(new EmptyBorder(15, 15, 15, 15));
             setBackground(BG_COLOR);
 
-            // Configuration Panel
+            // ── Config panel ─────────────────────────────────────────────────
             JPanel configPanel = new JPanel(new GridBagLayout());
             configPanel.setBackground(Color.WHITE);
             configPanel.setBorder(createTitledBorder("Unified Process Configuration"));
 
             GridBagConstraints gbc = new GridBagConstraints();
-            gbc.insets = new Insets(10, 10, 10, 10);
-            gbc.fill = GridBagConstraints.HORIZONTAL;
+            gbc.insets = new Insets(6, 10, 2, 10);
+            gbc.fill   = GridBagConstraints.HORIZONTAL;
 
-            // Row 0: Input Files
-            gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
+            // Row 0: label
+            gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0; gbc.gridwidth = 1;
             configPanel.add(new JLabel("Input Excel Files:"), gbc);
 
-            gbc.gridx = 1; gbc.gridy = 0; gbc.weightx = 1.0;
-            JButton selectInputsBtn = createStyledButton("Select Files");
-            selectInputsBtn.addActionListener(e -> selectInputs());
-            configPanel.add(selectInputsBtn, gbc);
-
-            // Row 1: List
+            // Row 1: file list
             gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 2;
-            gbc.fill = GridBagConstraints.BOTH;
-            gbc.weighty = 0.5;
-            gbc.ipady = 50;
+            gbc.fill    = GridBagConstraints.BOTH;
+            gbc.weighty = 1.0;
+            inputFilesList.setFixedCellHeight(22);
             JScrollPane listScroll = new JScrollPane(inputFilesList);
+            listScroll.setPreferredSize(new Dimension(0, 90));
             listScroll.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
             configPanel.add(listScroll, gbc);
-            gbc.ipady = 0;
-
-            // Row 2: Target Directory
-            gbc.fill = GridBagConstraints.HORIZONTAL;
             gbc.weighty = 0;
-            gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 1;
+
+            // Row 2: input error
+            gbc.fill   = GridBagConstraints.HORIZONTAL;
+            gbc.gridx  = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+            gbc.insets = new Insets(0, 10, 0, 10);
+            inputErrorLabel.setForeground(new Color(192, 57, 43));
+            inputErrorLabel.setFont(MAIN_FONT.deriveFont(Font.BOLD, 11f));
+            configPanel.add(inputErrorLabel, gbc);
+            gbc.insets = new Insets(4, 10, 4, 10);
+
+            // Row 3: file action buttons
+            gbc.fill   = GridBagConstraints.NONE;
+            gbc.gridx  = 0; gbc.gridy = 3; gbc.gridwidth = 2;
+            gbc.anchor = GridBagConstraints.EAST;
+            JPanel fileButtonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+            fileButtonsPanel.setOpaque(false);
+            JButton addBtn    = createStyledButton("Add Files");
+            JButton removeBtn = createStyledButton("Remove Selected");
+            JButton clearBtn  = createStyledButton("Clear All");
+            addBtn.addActionListener(e    -> selectInputs());
+            removeBtn.addActionListener(e -> removeSelectedInputs());
+            clearBtn.addActionListener(e  -> clearInputs());
+            fileButtonsPanel.add(addBtn);
+            fileButtonsPanel.add(removeBtn);
+            fileButtonsPanel.add(clearBtn);
+            configPanel.add(fileButtonsPanel, gbc);
+            gbc.anchor = GridBagConstraints.WEST;
+
+            // Row 4: output dir
+            gbc.fill   = GridBagConstraints.HORIZONTAL;
+            gbc.gridx  = 0; gbc.gridy = 4; gbc.gridwidth = 1; gbc.weightx = 0;
             configPanel.add(new JLabel("Target Output Directory:"), gbc);
 
-            gbc.gridx = 1; gbc.gridy = 2;
-            JPanel dirPanel = new JPanel(new BorderLayout(10, 0));
+            gbc.gridx = 1; gbc.gridy = 4; gbc.weightx = 1.0;
+            JPanel dirPanel = new JPanel(new BorderLayout(8, 0));
             dirPanel.setOpaque(false);
             targetDirField.setEditable(false);
             dirPanel.add(targetDirField, BorderLayout.CENTER);
@@ -149,58 +178,172 @@ public class UnifiedMain extends JFrame {
             dirPanel.add(selectTargetBtn, BorderLayout.EAST);
             configPanel.add(dirPanel, gbc);
 
-            // Row 3: Months Spinner (Restored)
-            gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0;
-            configPanel.add(new JLabel("Forecast Months (for Month Module):"), gbc);
+            // Row 5: output error
+            gbc.gridx  = 0; gbc.gridy = 5; gbc.gridwidth = 2;
+            gbc.insets = new Insets(0, 10, 0, 10);
+            outputErrorLabel.setForeground(new Color(192, 57, 43));
+            outputErrorLabel.setFont(MAIN_FONT.deriveFont(Font.BOLD, 11f));
+            configPanel.add(outputErrorLabel, gbc);
+            gbc.insets = new Insets(4, 10, 4, 10);
 
-            gbc.gridx = 1; gbc.gridy = 3; gbc.weightx = 1.0;
-            // Style the spinner a bit
+            // Row 6: months spinner
+            gbc.gridx = 0; gbc.gridy = 6; gbc.gridwidth = 1; gbc.weightx = 0;
+            configPanel.add(new JLabel("Forecast Months (Month Module):"), gbc);
+
+            gbc.gridx = 1; gbc.gridy = 6; gbc.weightx = 1.0;
             JComponent editor = monthsSpinner.getEditor();
-            if (editor instanceof JSpinner.DefaultEditor) {
-                ((JSpinner.DefaultEditor)editor).getTextField().setColumns(5);
-            }
+            if (editor instanceof JSpinner.DefaultEditor)
+                ((JSpinner.DefaultEditor) editor).getTextField().setColumns(4);
             JPanel spinnerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
             spinnerPanel.setOpaque(false);
+            monthsToggle.setOpaque(false);
+            monthsToggle.setFont(MAIN_FONT);
+            monthsToggle.addActionListener(e -> monthsSpinner.setEnabled(monthsToggle.isSelected()));
+            spinnerPanel.add(monthsToggle);
+            spinnerPanel.add(Box.createHorizontalStrut(10));
             spinnerPanel.add(monthsSpinner);
             configPanel.add(spinnerPanel, gbc);
 
-            // Row 4: Execute
-            gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
-            gbc.fill = GridBagConstraints.NONE;
+            // Row 7: run button
+            gbc.gridx  = 0; gbc.gridy = 7; gbc.gridwidth = 2;
+            gbc.fill   = GridBagConstraints.NONE;
             gbc.anchor = GridBagConstraints.CENTER;
-            JButton runBtn = createStyledButton("RUN ALL PROCESSES");
-            runBtn.setBackground(new Color(231, 76, 60)); // Red/Orange for emphasis
+            gbc.insets = new Insets(10, 10, 12, 10);
+            runBtn.setBackground(new Color(231, 76, 60));
+            runBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+            runBtn.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(192, 57, 43), 1),
+                    BorderFactory.createEmptyBorder(8, 28, 8, 28)
+            ));
             runBtn.addActionListener(e -> runAll());
             configPanel.add(runBtn, gbc);
 
-            add(configPanel, BorderLayout.NORTH);
+            // ── Progress panel ───────────────────────────────────────────────
+            progressBar.setStringPainted(true);
+            progressBar.setString("Idle");
+            progressBar.setValue(0);
+            progressBar.setPreferredSize(new Dimension(0, 30));
+            progressBar.setForeground(new Color(39, 174, 96));
+            progressBar.setBackground(new Color(210, 210, 210));
+            progressBar.setFont(new Font("Segoe UI", Font.BOLD, 12));
 
-            // Logs
+            statusLabel.setFont(MAIN_FONT);
+            statusLabel.setForeground(TEXT_COLOR);
+            statusLabel.setBorder(new EmptyBorder(2, 4, 4, 4));
+
+            JPanel progressPanel = new JPanel(new BorderLayout(4, 2));
+            progressPanel.setBackground(BG_COLOR);
+            progressPanel.setBorder(createTitledBorder("Execution Progress"));
+            progressPanel.add(progressBar,  BorderLayout.CENTER);
+            progressPanel.add(statusLabel,  BorderLayout.SOUTH);
+            progressPanel.setPreferredSize(new Dimension(0, 85));
+
+            // ── Log panel ────────────────────────────────────────────────────
             logArea.setEditable(false);
+            logArea.setLineWrap(false);
             JScrollPane logScroll = new JScrollPane(logArea);
             logScroll.setBorder(createTitledBorder("Execution Logs"));
-            add(logScroll, BorderLayout.CENTER);
+
+            // ── Bottom: progress + logs stacked ─────────────────────────────
+            JPanel bottomPanel = new JPanel(new BorderLayout(0, 8));
+            bottomPanel.setOpaque(false);
+            bottomPanel.add(progressPanel, BorderLayout.NORTH);
+            bottomPanel.add(logScroll,     BorderLayout.CENTER);
+
+            // ── Split: config (top) / progress+logs (bottom) ─────────────────
+            JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, configPanel, bottomPanel);
+            split.setResizeWeight(0.50);  // config gets ~50%
+            split.setDividerSize(7);
+            split.setBorder(null);
+            split.setOpaque(false);
+
+            add(split, BorderLayout.CENTER);
+
+            loadHistory();
         }
+
+        // ── File helpers ─────────────────────────────────────────────────────
 
         private void selectInputs() {
             JFileChooser chooser = new JFileChooser();
             chooser.setMultiSelectionEnabled(true);
             chooser.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx", "xls"));
-            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                for (File f : chooser.getSelectedFiles()) {
-                    if (!inputFilesModel.contains(f)) {
-                        inputFilesModel.addElement(f);
-                    }
-                }
-            }
+            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
+                for (File f : chooser.getSelectedFiles())
+                    if (!inputFilesModel.contains(f)) inputFilesModel.addElement(f);
+        }
+
+        private void removeSelectedInputs() {
+            List<File> selected = inputFilesList.getSelectedValuesList();
+            if (selected == null || selected.isEmpty()) return;
+            for (File f : selected) inputFilesModel.removeElement(f);
+        }
+
+        private void clearInputs() {
+            inputFilesModel.clear();
         }
 
         private void selectTarget() {
             JFileChooser chooser = new JFileChooser();
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                targetDirField.setText(chooser.getSelectedFile().getAbsolutePath());
+                File sel = chooser.getSelectedFile();
+                targetDirField.setText(sel.getAbsolutePath());
+                appendHistory(sel.getAbsolutePath(), (Integer) monthsSpinner.getValue());
             }
+        }
+
+        // ── History ──────────────────────────────────────────────────────────
+
+        private void appendHistory(String path, int months) {
+            File file = new File(HISTORY_PATH);
+            File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            try (BufferedWriter bw = new BufferedWriter(new FileWriter(file, false))) {
+                bw.write(java.time.LocalDateTime.now() + ";" + path + ";" + months);
+                bw.newLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        private void loadHistory() {
+            File file = new File(HISTORY_PATH);
+            if (!file.exists()) return;
+            String lastLine = null;
+            try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+                String line;
+                while ((line = br.readLine()) != null)
+                    if (!line.trim().isEmpty()) lastLine = line;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            if (lastLine == null) return;
+            String[] parts = lastLine.split(";", -1);
+            if (parts.length >= 3) {
+                if (!parts[1].isEmpty()) targetDirField.setText(parts[1]);
+                try { monthsSpinner.setValue(Integer.parseInt(parts[2])); } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        // ── Progress / log ───────────────────────────────────────────────────
+
+        /** Update the progress bar. value must be 0..3. */
+        private void setProgress(int value, String barLabel, String detail) {
+            SwingUtilities.invokeLater(() -> {
+                progressBar.setValue(value);
+                int pct = (value * 100) / progressBar.getMaximum();
+                progressBar.setString(pct + "%  —  " + barLabel);
+                statusLabel.setText("  ▸  " + detail);
+            });
+        }
+
+        private void resetProgress() {
+            SwingUtilities.invokeLater(() -> {
+                progressBar.setValue(0);
+                progressBar.setString("Starting...");
+                statusLabel.setText("  ▸  Initializing");
+            });
         }
 
         private void log(String msg) {
@@ -210,78 +353,82 @@ public class UnifiedMain extends JFrame {
             });
         }
 
+        // ── Main execution ───────────────────────────────────────────────────
+
         private void runAll() {
-            if (inputFilesModel.isEmpty() || targetDirField.getText().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Please select input files and output directory.", "Warning", JOptionPane.WARNING_MESSAGE);
-                return;
+            inputErrorLabel.setText(" ");
+            outputErrorLabel.setText(" ");
+
+            boolean hasError = false;
+            if (inputFilesModel.isEmpty()) {
+                inputErrorLabel.setText("Please add at least one input Excel file.");
+                hasError = true;
             }
+            if (targetDirField.getText().isEmpty()) {
+                outputErrorLabel.setText("Please select an output directory.");
+                hasError = true;
+            }
+            if (hasError) return;
 
             File targetDir = new File(targetDirField.getText());
             if (!targetDir.exists() || !targetDir.isDirectory()) {
-                 JOptionPane.showMessageDialog(this, "Invalid target directory.", "Error", JOptionPane.ERROR_MESSAGE);
-                 return;
+                JOptionPane.showMessageDialog(this, "Invalid target directory.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
             }
 
-            // Create Main Output Folder
             java.time.LocalDateTime now = java.time.LocalDateTime.now();
-            java.time.format.DateTimeFormatter monthFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM_yyyy");
-            
-            String currentMonthStr = now.format(monthFormatter);
-            String mainFolderName = "forecast_italy_" + currentMonthStr ;
-            File mainOutputFolder = new File(targetDir, mainFolderName);
-            if (!mainOutputFolder.exists()) {
-                mainOutputFolder.mkdirs();
-            }
+            String currentMonthStr = now.format(java.time.format.DateTimeFormatter.ofPattern("MMM_yyyy"));
+            String runStamp        = now.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
 
-            // Create Sub-folders
-            File rateFolder = new File(mainOutputFolder, "forecast_it_rate_" + currentMonthStr);
-            if (!rateFolder.exists()) rateFolder.mkdirs();
+            File mainOutputFolder = new File(targetDir, "forecast_italy_" + currentMonthStr + "_" + runStamp);
+            mainOutputFolder.mkdirs();
 
-            File extFolder = new File(mainOutputFolder, "forecast_EXT_" + currentMonthStr);
-            if (!extFolder.exists()) extFolder.mkdirs();
+            File rateFolder  = new File(mainOutputFolder, "forecast_it_rate_" + currentMonthStr);
+            File extFolder   = new File(mainOutputFolder, "forecast_EXT_"     + currentMonthStr);
+            File monthFolder = new File(mainOutputFolder, "forecast_month_"   + currentMonthStr);
+            rateFolder.mkdirs(); extFolder.mkdirs(); monthFolder.mkdirs();
 
-            File monthFolder = new File(mainOutputFolder, "forecast_month_" + currentMonthStr); // Optional but good for consistency
-            if (!monthFolder.exists()) monthFolder.mkdirs();
+            int months       = (Integer) monthsSpinner.getValue();
+            boolean useManual = monthsToggle.isSelected();
+            appendHistory(targetDir.getAbsolutePath(), months);
 
-            // Months value from spinner
-            int months = (Integer) monthsSpinner.getValue();
             List<File> inputs = new ArrayList<>();
-            for(int i=0; i<inputFilesModel.size(); i++) inputs.add(inputFilesModel.get(i));
+            for (int i = 0; i < inputFilesModel.size(); i++) inputs.add(inputFilesModel.get(i));
+
+            // Disable run button, reset progress
+            runBtn.setEnabled(false);
+            runBtn.setText("Running...");
+            resetProgress();
 
             new Thread(() -> {
                 log("=== STARTING UNIFIED EXECUTION ===");
-                log("Main Output Folder: " + mainOutputFolder.getAbsolutePath());
-                log("Selected Months for Month Module: " + months);
-                
-                // 1. RATE MODULE
+                log("Output Folder : " + mainOutputFolder.getAbsolutePath());
+                log("Months setting: " + months);
+
+                // ── 1. RATE ──────────────────────────────────────────────────
+                setProgress(0, "Step 1/3 — Rate", "Running Forecast By Rate...");
+                log("\n[1/3] Running Forecast By Rate...");
                 try {
-                    log("\n[1/3] Running Forecast By Rate...");
                     ReferenceData referenceData = new ReferenceData();
                     String dataPath = "C:\\Users\\Sanae\\Desktop\\Task_java_excel\\ctsInvoicing\\src\\main\\resources\\Data.xlsx";
                     if (!new File(dataPath).exists()) dataPath = "src/main/resources/Data.xlsx";
-                    
+
                     referenceData.load(dataPath);
-                    GroupAggregator aggregator = new GroupAggregator();
+                    GroupAggregator   aggregator   = new GroupAggregator();
                     InputRowProcessor rowProcessor = new InputRowProcessor(referenceData);
-                    InputFilesReader filesReader = new InputFilesReader(rowProcessor, aggregator);
+                    InputFilesReader  filesReader  = new InputFilesReader(rowProcessor, aggregator);
 
                     for (File f : inputs) {
-                        try {
-                            filesReader.processFile(f.getAbsolutePath());
-                        } catch (Exception e) {
-                            log("  - Rate Warning: Failed to process " + f.getName() + " (might be wrong format for Rate)");
-                        }
+                        try { filesReader.processFile(f.getAbsolutePath()); }
+                        catch (Exception e) { log("  - Rate Warning: Failed to process " + f.getName()); }
                     }
 
-                    // Print raw data grouped by user
-                    rowProcessor.printRawRates();
-
                     if (!aggregator.getAggregates().isEmpty()) {
-                        OutputWriter writer = new OutputWriter(referenceData, aggregator);
-                        String fullMonthName = now.format(java.time.format.DateTimeFormatter.ofPattern("MMMM"));
-                        String rateOutput = new File(rateFolder, "Rate Forecast " + fullMonthName + ".xlsx").getAbsolutePath();
-                        writer.write(rateOutput);
-                        log("  > Rate Report created: " + rateOutput);
+                        OutputWriter writer      = new OutputWriter(referenceData, aggregator);
+                        String fullMonth         = now.format(java.time.format.DateTimeFormatter.ofPattern("MMMM"));
+                        String rateOut           = new File(rateFolder, "Rate Forecast " + fullMonth + ".xlsx").getAbsolutePath();
+                        writer.write(rateOut);
+                        log("  > Rate Report created: " + rateOut);
                     } else {
                         log("  - Rate Warning: No valid data found for Rate module.");
                     }
@@ -290,32 +437,28 @@ public class UnifiedMain extends JFrame {
                     e.printStackTrace();
                 }
 
-                // 2. EXT CODE MODULE
+                // ── 2. EXT CODE ──────────────────────────────────────────────
+                setProgress(1, "Step 2/3 — ExtCode", "Running Forecast By ExtCode...");
+                log("\n[2/3] Running Forecast By ExtCode...");
                 try {
-                    log("\n[2/3] Running Forecast By ExtCode...");
-                    ExcelReader reader = new ExcelReader();
-                    ServiceTeamParser parser = new ServiceTeamParser();
-                    forecast.by.extcode.service.ExcelWriter writer = new forecast.by.extcode.service.ExcelWriter();
+                    ExcelReader       reader  = new ExcelReader();
+                    ServiceTeamParser parser  = new ServiceTeamParser();
+                    forecast.by.extcode.ExcelWriter writer = new forecast.by.extcode.ExcelWriter();
 
                     List<ExcelReader.ServiceTeamRaw> rawItems = new ArrayList<>();
                     for (File f : inputs) {
-                        try {
-                            rawItems.addAll(reader.extractRawServiceTeams(f));
-                        } catch (Exception e) {
-                            log("  - ExtCode Warning: Failed to process " + f.getName());
-                        }
+                        try { rawItems.addAll(reader.extractRawServiceTeams(f)); }
+                        catch (Exception e) { log("  - ExtCode Warning: Failed to process " + f.getName()); }
                     }
 
                     if (!rawItems.isEmpty()) {
                         List<String> labels = new ArrayList<>();
                         for (ExcelReader.ServiceTeamRaw raw : rawItems) labels.add(raw.getLabel());
                         List<ServiceTeam> parsed = parser.parse(labels);
-
                         for (int i = 0; i < parsed.size(); i++) {
                             parsed.get(i).setCost(rawItems.get(i).getCost() == null ? "" : String.valueOf(rawItems.get(i).getCost()));
                             parsed.get(i).setStyle(rawItems.get(i).getCost() == null ? null : rawItems.get(i).getStyle());
                         }
-
                         writer.write(parsed, extFolder);
                         log("  > ExtCode Report created in: " + extFolder.getAbsolutePath());
                     } else {
@@ -326,13 +469,24 @@ public class UnifiedMain extends JFrame {
                     e.printStackTrace();
                 }
 
-                // 3. MONTH MODULE
+                // ── 3. MONTH ─────────────────────────────────────────────────
+                setProgress(2, "Step 3/3 — Month", "Running Forecast By Month...");
+                log("\n[3/3] Running Forecast By Month...");
                 try {
-                    log("\n[3/3] Running Forecast By Month...");
                     for (File f : inputs) {
                         try {
-                            log("  - Processing " + f.getName() + " with " + months + " months...");
-                            ExecuteService.executeScript(f.getAbsolutePath(), monthFolder.getAbsolutePath(), months);
+                            int currentMonths = months;
+                            if (!useManual) {
+                                int detected = countMonthSheets(f);
+                                if (detected > 0) {
+                                    currentMonths = detected;
+                                    log("  - Auto-detected months for " + f.getName() + ": " + currentMonths);
+                                } else {
+                                    log("  - Warning: No Facturacion sheets found in " + f.getName() + ". Using default: " + months);
+                                }
+                            }
+                            log("  - Processing " + f.getName() + " with " + currentMonths + " months...");
+                            ExecuteService.executeScript(f.getAbsolutePath(), monthFolder.getAbsolutePath(), currentMonths);
                         } catch (Exception e) {
                             log("  - Month Warning: Failed to process " + f.getName() + ": " + e.getMessage());
                         }
@@ -342,15 +496,35 @@ public class UnifiedMain extends JFrame {
                     log("  ! Month Module Critical Error: " + e.getMessage());
                 }
 
+                // ── Done ─────────────────────────────────────────────────────
+                setProgress(3, "Completed", "All modules finished successfully.");
                 log("\n=== EXECUTION COMPLETED ===");
-                JOptionPane.showMessageDialog(this, "All processes finished. Check logs for details.\nOutput: " + mainOutputFolder.getAbsolutePath());
+
+                SwingUtilities.invokeLater(() -> {
+                    runBtn.setEnabled(true);
+                    runBtn.setText("RUN ALL PROCESSES");
+                    JOptionPane.showMessageDialog(this,
+                            "All processes finished. Check logs for details.\nOutput: "
+                            + mainOutputFolder.getAbsolutePath());
+                });
             }).start();
         }
 
+        // ── Sheet counter ─────────────────────────────────────────────────────
 
+        private int countMonthSheets(File f) {
+            int count = 0;
+            try (org.apache.poi.ss.usermodel.Workbook wb = org.apache.poi.ss.usermodel.WorkbookFactory.create(f)) {
+                for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                    String n = wb.getSheetName(i).toLowerCase()
+                            .replace("á","a").replace("é","e")
+                            .replace("í","i").replace("ó","o").replace("ú","u");
+                    if (n.contains("facturacion")) count++;
+                }
+            } catch (Exception e) {
+                log("  - Error counting sheets in " + f.getName() + ": " + e.getMessage());
+            }
+            return count;
+        }
     }
-
-
-
-
 }

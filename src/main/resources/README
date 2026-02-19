@@ -1,0 +1,18 @@
+Step 1 : Clean Code
+main.java.invoicing
+    Helper
+        ExcelStyles
+        CellReader(Cell-> double/String/BigDecimal)
+    Entities
+    Enums
+    Service
+        Impl
+        RateService
+        EXTService
+        MonthService
+        ExcelReader
+        ExcelWriter
+    View
+    Main
+
+Step 1 : Create executable

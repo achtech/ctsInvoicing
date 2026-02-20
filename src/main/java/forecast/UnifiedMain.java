@@ -98,12 +98,13 @@ public class UnifiedMain extends JFrame {
         private final JLabel                 outputErrorLabel = new JLabel(" ");
         private final JTextArea              logArea          = new JTextArea();
 
-        // Progress bar + status label
         private final JProgressBar progressBar = new JProgressBar(0, 3);
         private final JLabel       statusLabel = new JLabel("Ready");
 
-        // Run button kept as field so we can disable/re-enable it
-        private final JButton runBtn = createStyledButton("RUN ALL PROCESSES");
+        private final JButton runBtn         = createStyledButton("RUN ALL PROCESSES");
+        private final JButton openOutputBtn  = createStyledButton("OPEN MAIN OUTPUT FOLDER");
+
+        private File lastMainOutputFolder;
 
         private static final String HISTORY_PATH = "ctsInvoicing/src/main/resources/history.csv";
 
@@ -216,7 +217,13 @@ public class UnifiedMain extends JFrame {
                     BorderFactory.createEmptyBorder(8, 28, 8, 28)
             ));
             runBtn.addActionListener(e -> runAll());
-            configPanel.add(runBtn, gbc);
+            openOutputBtn.setEnabled(false);
+            openOutputBtn.addActionListener(e -> openOutputFolder());
+            JPanel actionButtonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+            actionButtonsPanel.setOpaque(false);
+            actionButtonsPanel.add(runBtn);
+            actionButtonsPanel.add(openOutputBtn);
+            configPanel.add(actionButtonsPanel, gbc);
 
             // ── Progress panel ───────────────────────────────────────────────
             progressBar.setStringPainted(true);
@@ -382,6 +389,7 @@ public class UnifiedMain extends JFrame {
 
             File mainOutputFolder = new File(targetDir, "forecast_italy_" + currentMonthStr + "_" + runStamp);
             mainOutputFolder.mkdirs();
+            lastMainOutputFolder = mainOutputFolder;
 
             File rateFolder  = new File(mainOutputFolder, "forecast_it_rate_" + currentMonthStr);
             File extFolder   = new File(mainOutputFolder, "forecast_EXT_"     + currentMonthStr);
@@ -395,9 +403,9 @@ public class UnifiedMain extends JFrame {
             List<File> inputs = new ArrayList<>();
             for (int i = 0; i < inputFilesModel.size(); i++) inputs.add(inputFilesModel.get(i));
 
-            // Disable run button, reset progress
             runBtn.setEnabled(false);
             runBtn.setText("Running...");
+            openOutputBtn.setEnabled(false);
             resetProgress();
 
             new Thread(() -> {
@@ -503,11 +511,38 @@ public class UnifiedMain extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     runBtn.setEnabled(true);
                     runBtn.setText("RUN ALL PROCESSES");
+                    if (lastMainOutputFolder != null) {
+                        openOutputBtn.setEnabled(true);
+                        openOutputBtn.setText("OPEN: " + lastMainOutputFolder.getName());
+                    }
                     JOptionPane.showMessageDialog(this,
                             "All processes finished. Check logs for details.\nOutput: "
                             + mainOutputFolder.getAbsolutePath());
                 });
             }).start();
+        }
+
+        private void openOutputFolder() {
+            if (lastMainOutputFolder == null) return;
+            if (!lastMainOutputFolder.exists() || !lastMainOutputFolder.isDirectory()) {
+                JOptionPane.showMessageDialog(this,
+                        "The output folder does not exist:\n" + lastMainOutputFolder.getAbsolutePath(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            try {
+                if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(lastMainOutputFolder);
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Opening folders is not supported on this system.",
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this,
+                        "Failed to open the output folder:\n" + lastMainOutputFolder.getAbsolutePath(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
 
         // ── Sheet counter ─────────────────────────────────────────────────────

@@ -42,7 +42,7 @@ public class DefaultDateProvider implements DateProvider {
 
     @Override
     public String getMonthNameSpanish(LocalDate date) {
-        return getMonthName(date, Locale.of("es", "ES"));
+        return getMonthName(date, new Locale("es", "ES"));
     }
 
     @Override

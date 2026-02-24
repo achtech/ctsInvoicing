@@ -2,6 +2,7 @@ package invoicing.Helper;
 // ReferenceData.java
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
@@ -17,8 +18,13 @@ public class ReferenceData {
     private Map<BigDecimal, String> rateToGroup = new HashMap<>();
 
     public void load(String path) throws IOException {
-        try (FileInputStream fis = new FileInputStream(path);
-             Workbook wb = new XSSFWorkbook(fis)) {
+        try (FileInputStream fis = new FileInputStream(path)) {
+            load(fis);
+        }
+    }
+
+    public void load(InputStream is) throws IOException {
+        try (Workbook wb = new XSSFWorkbook(is)) {
             Sheet sheet = wb.getSheetAt(0); // Reference Table: Column A = GroupId, Column B = Rate
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Skip header

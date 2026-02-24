@@ -57,9 +57,24 @@ public class UnifiedExecutionService {
         listener.log("\n[1/3] Running Forecast By Rate...");
         try {
             ReferenceData referenceData = new ReferenceData();
-            String dataPath = "src/main/resources/Data.xlsx";
+            String externalPath = "src/main/resources/Data.xlsx";
+            File externalFile = new File(externalPath);
 
-            referenceData.load(dataPath);
+            if (externalFile.exists()) {
+                referenceData.load(externalPath);
+                listener.log("  - Loaded reference data from: " + externalFile.getAbsolutePath());
+            } else {
+                // Try to load from classpath (inside JAR)
+                try (java.io.InputStream is = getClass().getResourceAsStream("/Data.xlsx")) {
+                    if (is != null) {
+                        referenceData.load(is);
+                        listener.log("  - Loaded reference data from internal resources.");
+                    } else {
+                        throw new java.io.IOException("Reference data 'Data.xlsx' not found in filesystem or internal resources.");
+                    }
+                }
+            }
+
             GroupAggregator aggregator = new GroupAggregator();
             InputRowProcessor rowProcessor = new InputRowProcessor(referenceData);
             InputFilesReader filesReader = new InputFilesReader(rowProcessor, aggregator);

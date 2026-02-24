@@ -327,13 +327,13 @@ public class DefaultExcelWriter implements ExcelWriter {
 
             // Cell 0: First cell of the first row
             if (!rows.isEmpty()) {
-                Cell firstCell = rows.getFirst().getCell(0);
+                Cell firstCell = rows.get(0).getCell(0);
                 newRow.createCell(0).setCellValue(firstCell != null ? firstCell.getNumericCellValue() : 0);
             }
 
             // Cell 1: Second cell of the first row
-            if (!rows.isEmpty() && rows.getFirst().getCell(1) != null) {
-                Cell secondCellFirst = rows.getFirst().getCell(1);
+            if (!rows.isEmpty() && rows.get(0).getCell(1) != null) {
+                Cell secondCellFirst = rows.get(0).getCell(1);
                 newRow.createCell(1).setCellValue(secondCellFirst.getStringCellValue());
             }
 
@@ -351,7 +351,7 @@ public class DefaultExcelWriter implements ExcelWriter {
             if (rows.size() > 1 && rows.get(1).getCell(1) != null) {
                 Cell secondCellSecond = rows.get(1).getCell(1);
                 BigDecimal input = BigDecimal.valueOf(Helper.getRates(secondCellSecond.getStringCellValue()));
-                String description = rows.getFirst()!=null && rows.getFirst().getCell(1)!=null && CellType.STRING.equals(rows.getFirst().getCell(1).getCellType()) && !rows.getFirst().getCell(1).getStringCellValue().isEmpty() ? rows.getFirst().getCell(1).getStringCellValue():"";
+                String description = rows.get(0)!=null && rows.get(0).getCell(1)!=null && CellType.STRING.equals(rows.get(0).getCell(1).getCellType()) && !rows.get(0).getCell(1).getStringCellValue().isEmpty() ? rows.get(0).getCell(1).getStringCellValue():"";
                 Cell thirdCell = newRow.createCell(3);
 
                 if(!description.isEmpty()) {

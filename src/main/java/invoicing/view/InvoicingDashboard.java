@@ -74,7 +74,15 @@ public class InvoicingDashboard extends JFrame {
 
         private File lastMainOutputFolder;
 
-        private static final String HISTORY_PATH = "src/main/resources/history.csv";
+        private static final String DEFAULT_HISTORY_PATH = "src/main/resources/history.csv";
+        private static final String LOCAL_HISTORY_PATH = "history.csv";
+
+        private String getEffectiveHistoryPath() {
+            if (new File(DEFAULT_HISTORY_PATH).exists()) {
+                return DEFAULT_HISTORY_PATH;
+            }
+            return LOCAL_HISTORY_PATH;
+        }
 
         public AllInOnePanel() {
             setLayout(new BorderLayout(10, 10));
@@ -286,7 +294,7 @@ public class InvoicingDashboard extends JFrame {
         }
 
         private void appendHistory(String path, int months) {
-            File file = new File(HISTORY_PATH);
+            File file = new File(getEffectiveHistoryPath());
             File parent = file.getParentFile();
             if (parent != null && !parent.exists()) {
                 parent.mkdirs();
@@ -300,7 +308,7 @@ public class InvoicingDashboard extends JFrame {
         }
 
         private void loadHistory() {
-            File file = new File(HISTORY_PATH);
+            File file = new File(getEffectiveHistoryPath());
             if (!file.exists()) {
                 return;
             }

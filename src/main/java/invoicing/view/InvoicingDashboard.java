@@ -11,10 +11,11 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.prefs.Preferences;
 
 public class InvoicingDashboard extends JFrame {
 
@@ -74,15 +75,7 @@ public class InvoicingDashboard extends JFrame {
 
         private File lastMainOutputFolder;
 
-        private static final String DEFAULT_HISTORY_PATH = "src/main/resources/history.csv";
-        private static final String LOCAL_HISTORY_PATH = "history.csv";
-
-        private String getEffectiveHistoryPath() {
-            if (new File(DEFAULT_HISTORY_PATH).exists()) {
-                return DEFAULT_HISTORY_PATH;
-            }
-            return LOCAL_HISTORY_PATH;
-        }
+        private final Preferences prefs = Preferences.userNodeForPackage(InvoicingDashboard.class);
 
         public AllInOnePanel() {
             setLayout(new BorderLayout(10, 10));
@@ -253,7 +246,7 @@ public class InvoicingDashboard extends JFrame {
 
             add(split, BorderLayout.CENTER);
 
-            loadHistory();
+            loadState();
         }
 
         private void selectInputs() {
@@ -289,53 +282,28 @@ public class InvoicingDashboard extends JFrame {
             if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
                 File sel = chooser.getSelectedFile();
                 targetDirField.setText(sel.getAbsolutePath());
-                appendHistory(sel.getAbsolutePath(), (Integer) monthsSpinner.getValue());
+                saveState(sel.getAbsolutePath(), (Integer) monthsSpinner.getValue());
             }
         }
 
-        private void appendHistory(String path, int months) {
-            File file = new File(getEffectiveHistoryPath());
-            File parent = file.getParentFile();
-            if (parent != null && !parent.exists()) {
-                parent.mkdirs();
-            }
-            try (BufferedWriter bw = new BufferedWriter(new FileWriter(file, false))) {
-                bw.write(java.time.LocalDateTime.now() + ";" + path + ";" + months);
-                bw.newLine();
-            } catch (IOException e) {
+        private void saveState(String path, int months) {
+            prefs.put("lastPath", path);
+            prefs.putInt("lastMonths", months);
+            try {
+                prefs.flush();
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }
 
-        private void loadHistory() {
-            File file = new File(getEffectiveHistoryPath());
-            if (!file.exists()) {
-                return;
+        private void loadState() {
+            String lastPath = prefs.get("lastPath", "");
+            int lastMonths = prefs.getInt("lastMonths", 3);
+
+            if (!lastPath.isEmpty()) {
+                targetDirField.setText(lastPath);
             }
-            String lastLine = null;
-            try (BufferedReader br = new BufferedReader(new FileReader(file))) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    if (!line.trim().isEmpty()) {
-                        lastLine = line;
-                    }
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            if (lastLine == null) {
-                return;
-            }
-            String[] parts = lastLine.split(";", -1);
-            if (parts.length >= 3) {
-                if (!parts[1].isEmpty()) {
-                    targetDirField.setText(parts[1]);
-                }
-                try {
-                    monthsSpinner.setValue(Integer.parseInt(parts[2]));
-                } catch (NumberFormatException ignored) {
-                }
-            }
+            monthsSpinner.setValue(lastMonths);
         }
 
         private void setProgress(int value, String barLabel, String detail) {
@@ -387,7 +355,7 @@ public class InvoicingDashboard extends JFrame {
 
             int months = (Integer) monthsSpinner.getValue();
             boolean useManual = monthsToggle.isSelected();
-            appendHistory(targetDir.getAbsolutePath(), months);
+            saveState(targetDir.getAbsolutePath(), months);
 
             List<File> inputs = new ArrayList<>();
             for (int i = 0; i < inputFilesModel.size(); i++) {

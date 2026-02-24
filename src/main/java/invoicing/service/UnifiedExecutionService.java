@@ -11,6 +11,7 @@ import invoicing.service.rate.InputRowProcessor;
 import invoicing.service.rate.OutputWriter;
 
 import java.io.File;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -57,23 +58,17 @@ public class UnifiedExecutionService {
         listener.log("\n[1/3] Running Forecast By Rate...");
         try {
             ReferenceData referenceData = new ReferenceData();
-            String externalPath = "src/main/resources/Data.xlsx";
-            File externalFile = new File(externalPath);
-
-            if (externalFile.exists()) {
-                referenceData.load(externalPath);
-                listener.log("  - Loaded reference data from: " + externalFile.getAbsolutePath());
-            } else {
-                // Try to load from classpath (inside JAR)
-                try (java.io.InputStream is = getClass().getResourceAsStream("/Data.xlsx")) {
-                    if (is != null) {
-                        referenceData.load(is);
-                        listener.log("  - Loaded reference data from internal resources.");
-                    } else {
-                        throw new java.io.IOException("Reference data 'Data.xlsx' not found in filesystem or internal resources.");
-                    }
+            try (InputStream dataStream = getClass().getClassLoader().getResourceAsStream("Data.xlsx")) {
+                if (dataStream == null) {
+                    listener.log("  ! Rate Error: Data.xlsx not found inside the JAR. Check build resources.");
+                    return;
                 }
+                referenceData.load(dataStream);
+            } catch (Exception e) {
+                listener.log("  ! Rate Error loading Data.xlsx: " + e.getMessage());
+                return;
             }
+
 
             GroupAggregator aggregator = new GroupAggregator();
             InputRowProcessor rowProcessor = new InputRowProcessor(referenceData);

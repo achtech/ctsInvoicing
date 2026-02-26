@@ -62,7 +62,8 @@ public class InvoicingDashboard extends JFrame {
         private final JList<File> inputFilesList = new JList<>(inputFilesModel);
         private final JTextField targetDirField = new JTextField();
         private final JSpinner monthsSpinner = new JSpinner(new SpinnerNumberModel(3, 1, 12, 1));
-        private final JCheckBox monthsToggle = new JCheckBox("Enable", true);
+        // Default: unchecked = auto-detect mode, spinner disabled
+        private final JCheckBox monthsToggle = new JCheckBox("Set manually", false);
         private final JLabel inputErrorLabel = new JLabel(" ");
         private final JLabel outputErrorLabel = new JLabel(" ");
         private final JTextArea logArea = new JTextArea();
@@ -178,14 +179,29 @@ public class InvoicingDashboard extends JFrame {
             if (editor instanceof JSpinner.DefaultEditor) {
                 ((JSpinner.DefaultEditor) editor).getTextField().setColumns(4);
             }
+            // Spinner starts DISABLED — default mode is auto-detect
+            monthsSpinner.setEnabled(false);
+
+            JLabel hintLabel = new JLabel("  ← Auto-detecting from Facturación sheets in each file");
+            hintLabel.setFont(MAIN_FONT.deriveFont(Font.ITALIC, 11f));
+            hintLabel.setForeground(new Color(100, 100, 100));
+
             JPanel spinnerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
             spinnerPanel.setOpaque(false);
             monthsToggle.setOpaque(false);
             monthsToggle.setFont(MAIN_FONT);
-            monthsToggle.addActionListener(e -> monthsSpinner.setEnabled(monthsToggle.isSelected()));
+            monthsToggle.setToolTipText("Check to enter months manually. Uncheck to auto-detect from Facturación sheets.");
+            monthsToggle.addActionListener(e -> {
+                monthsSpinner.setEnabled(monthsToggle.isSelected());
+                hintLabel.setText(monthsToggle.isSelected()
+                        ? "  ← Using manual value"
+                        : "  ← Auto-detecting from Facturación sheets in each file");
+            });
             spinnerPanel.add(monthsToggle);
             spinnerPanel.add(Box.createHorizontalStrut(10));
             spinnerPanel.add(monthsSpinner);
+            spinnerPanel.add(Box.createHorizontalStrut(8));
+            spinnerPanel.add(hintLabel);
             configPanel.add(spinnerPanel, gbc);
 
             gbc.gridx = 0;
@@ -282,13 +298,14 @@ public class InvoicingDashboard extends JFrame {
             if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
                 File sel = chooser.getSelectedFile();
                 targetDirField.setText(sel.getAbsolutePath());
-                saveState(sel.getAbsolutePath(), (Integer) monthsSpinner.getValue());
+                saveState(sel.getAbsolutePath(), (Integer) monthsSpinner.getValue(), monthsToggle.isSelected());
             }
         }
 
-        private void saveState(String path, int months) {
+        private void saveState(String path, int months, boolean useManual) {
             prefs.put("lastPath", path);
             prefs.putInt("lastMonths", months);
+            prefs.putBoolean("useManual", useManual);
             try {
                 prefs.flush();
             } catch (Exception e) {
@@ -299,11 +316,14 @@ public class InvoicingDashboard extends JFrame {
         private void loadState() {
             String lastPath = prefs.get("lastPath", "");
             int lastMonths = prefs.getInt("lastMonths", 3);
+            boolean useManual = prefs.getBoolean("useManual", false); // default: auto-detect
 
             if (!lastPath.isEmpty()) {
                 targetDirField.setText(lastPath);
             }
             monthsSpinner.setValue(lastMonths);
+            monthsToggle.setSelected(useManual);
+            monthsSpinner.setEnabled(useManual);
         }
 
         private void setProgress(int value, String barLabel, String detail) {
@@ -355,7 +375,7 @@ public class InvoicingDashboard extends JFrame {
 
             int months = (Integer) monthsSpinner.getValue();
             boolean useManual = monthsToggle.isSelected();
-            saveState(targetDir.getAbsolutePath(), months);
+            saveState(targetDir.getAbsolutePath(), months, useManual);
 
             List<File> inputs = new ArrayList<>();
             for (int i = 0; i < inputFilesModel.size(); i++) {

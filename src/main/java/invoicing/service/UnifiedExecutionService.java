@@ -41,7 +41,7 @@ public class UnifiedExecutionService {
 
         listener.log("=== STARTING UNIFIED EXECUTION ===");
         listener.log("Output Folder : " + mainOutputFolder.getAbsolutePath());
-        listener.log("Months setting: " + months);
+        listener.log("Months mode   : " + (useManual ? "MANUAL (" + months + " months)" : "AUTO-DETECT from Facturacion sheets"));
 
         runRateModule(now, rateFolder, inputs, listener);
         runExtModule(extFolder, inputs, listener);

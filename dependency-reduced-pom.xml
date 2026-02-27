@@ -5,6 +5,7 @@
   <artifactId>InvoicingTool</artifactId>
   <version>1.0-SNAPSHOT</version>
   <build>
+    <finalName>InvoicingTool</finalName>
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -25,7 +26,14 @@
             <configuration>
               <transformers>
                 <transformer>
-                  <mainClass>forecast.by.month.Main</mainClass>
+                  <mainClass>invoicing.Main</mainClass>
+                </transformer>
+                <transformer />
+                <transformer>
+                  <resource>META-INF/spring.handlers</resource>
+                </transformer>
+                <transformer>
+                  <resource>META-INF/spring.schemas</resource>
                 </transformer>
               </transformers>
             </configuration>

@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Map;
 
+import invoicing.Helper.Helper;
 import invoicing.Helper.GroupAggregator;
 import invoicing.Helper.ReferenceData;
 import org.apache.poi.ss.usermodel.*;
@@ -63,6 +64,7 @@ public class OutputWriter {
                         cost += c;
                     }
                 }
+                cost = Helper.round(cost);
                 
                 totalCost += cost;
 
@@ -76,6 +78,7 @@ public class OutputWriter {
                 Cell c12 = dataRow.createCell(5); c12.setCellValue(cost); c12.setCellStyle(currencyStyle);
             }
             
+            totalCost = Helper.round(totalCost);
             // Create total row
             Row totalRow = sheet.createRow(rowNum);
             Cell c13 = totalRow.createCell(4); c13.setCellValue("Total"); c13.setCellStyle(headerStyle);

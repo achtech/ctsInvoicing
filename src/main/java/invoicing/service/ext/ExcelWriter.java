@@ -3,6 +3,7 @@ package invoicing.service.ext;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import invoicing.Helper.Helper;
 import invoicing.entities.ServiceTeam;
 
 import java.io.File;
@@ -45,14 +46,16 @@ public class ExcelWriter {
             Cell c12 = row.createCell(2);c12.setCellValue(st.getProjectDescription());c12.setCellStyle(bodyStyle);
             double costValue = Double.parseDouble(st.getCost().isEmpty() ? "0" : st.getCost());  // convert String → double
             Cell c13 = row.createCell(3);
-            c13.setCellValue(costValue);                          // write numeric value
+            c13.setCellValue(Helper.round(costValue));                          // write numeric value (ROUNDED TO 2 DECIMALS)
             c13.setCellStyle(currencyStyle);
             Cell c14 = row.createCell(4);c14.setCellValue(st.getBuDescription());c14.setCellStyle(bodyStyle);
         }
 
-        double grandTotal = items.stream()
+        double grandTotalRaw = items.stream()
                 .mapToDouble(item -> Double.parseDouble(item.getCost().isEmpty() ? "0" :item.getCost() ))
                 .sum();
+        double grandTotal = Helper.round(grandTotalRaw); // ROUNDED TO 2 DECIMALS
+
         int grandTotalRow = items.size()+1;
         Row footer = sheet.createRow(grandTotalRow);
         Cell c20 = footer.createCell(2);c20.setCellValue("Grand Total");c20.setCellStyle(headerStyle);
@@ -72,19 +75,19 @@ public class ExcelWriter {
         int gaRow = cogsRow+1;
         Row ga = sheet.createRow(gaRow);
         Cell c27 = ga.createCell(0);c27.setCellValue("G&A (10% COGS)");c27.setCellStyle(bodyStyle);
-        Cell c28 = ga.createCell(1);c28.setCellValue(grandTotal*0.1);c28.setCellStyle(currencyStyle);
+        Cell c28 = ga.createCell(1);c28.setCellValue(Helper.round(grandTotal*0.1));c28.setCellStyle(currencyStyle);
         Cell c29 = ga.createCell(2);c29.setCellValue("INT Code1");c29.setCellStyle(bodyStyle);
 
         int tpRow = gaRow+1;
         Row tp = sheet.createRow(tpRow);
         Cell c30 = tp.createCell(0);c30.setCellValue("TP (5% (COGS+G&A))");c30.setCellStyle(bodyStyle);
-        Cell c31 = tp.createCell(1);c31.setCellValue(grandTotal*0.055);c31.setCellStyle(currencyStyle);
+        Cell c31 = tp.createCell(1);c31.setCellValue(Helper.round(grandTotal*0.055));c31.setCellStyle(currencyStyle);
         Cell c32 = tp.createCell(2);c32.setCellValue("INT Code2");c32.setCellStyle(bodyStyle);
 
         int totalRow = tpRow+1;
         Row total = sheet.createRow(totalRow);
         Cell c33 = total.createCell(0);c33.setCellValue("Total Cost");c33.setCellStyle(bodyStyle);
-        Cell c34 = total.createCell(1);c34.setCellValue(grandTotal*1.155);c34.setCellStyle(currencyStyle);
+        Cell c34 = total.createCell(1);c34.setCellValue(Helper.round(grandTotal*1.155));c34.setCellStyle(currencyStyle);
 
         for (int i = 0; i < 10; i++) {
             sheet.autoSizeColumn(i);
@@ -106,8 +109,10 @@ public class ExcelWriter {
     private CellStyle getCurrencyStyle(Workbook workbook){
         CellStyle currencyStyle = workbook.createCellStyle();
         currencyStyle.setDataFormat(
-                workbook.createDataFormat().getFormat("#,##0.00€")
+                workbook.createDataFormat().getFormat("#,##0.00")
         );
+        currencyStyle.setAlignment(HorizontalAlignment.RIGHT);
+        currencyStyle.setVerticalAlignment(VerticalAlignment.CENTER);
         currencyStyle.setBorderBottom(BorderStyle.THIN);
         currencyStyle.setBorderTop(BorderStyle.THIN);
         currencyStyle.setBorderLeft(BorderStyle.THIN);

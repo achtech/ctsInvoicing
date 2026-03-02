@@ -15,6 +15,10 @@ import java.util.Locale;
 
 public class Helper {
 
+    public static double round(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
+
     // Helper method to check if a row is empty
     public static boolean isRowEmpty(Row row) {
         if (row == null)

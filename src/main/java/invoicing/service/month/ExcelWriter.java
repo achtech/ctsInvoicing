@@ -1,5 +1,6 @@
 package invoicing.service.month;
 
+import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 
 import java.math.BigDecimal;
@@ -9,4 +10,5 @@ public interface ExcelWriter {
     Workbook createWorkbookWithSheets(List<String> monthNames);
     BigDecimal getTotalServiceTeam(Workbook inputWorkbook, String serviceTeam, String sheetName);
     void copyServiceHoursSheetData(Workbook inputWorkbook, Workbook outputWorkbook, String serviceTeam, String HorasServicioSheetName, String ServiceHoursSheetName, String ajustesSheetName, String facturacionSheetName);
+    int copyServiceHoursToSheet(Workbook inputWorkbook, Sheet outputSheet, int startRowIndex, String serviceTeam, String HorasServicioSheetName, String ServiceHoursSheetName, String ajustesSheetName, String facturacionSheetName);
 }

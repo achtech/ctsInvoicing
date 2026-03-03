@@ -54,17 +54,27 @@ public class DefaultExcelWriter implements ExcelWriter {
     @Override
     public void copyServiceHoursSheetData(Workbook inputWorkbook, Workbook outputWorkbook, String serviceTeam,
                                           String invoicingSheetNameES, String invoicingSheetName, String ajustesSheetName, String facturacionSheetName) {
-        // TODO Auto-generated method stub
-        Sheet inputSheet = inputWorkbook.getSheet(invoicingSheetNameES);
         Sheet outputSheet = outputWorkbook.getSheet(invoicingSheetName);
-        if (inputSheet == null || outputSheet == null) {
-            System.err.println("Skipping invoicing details sheet: input or output sheet not found.");
+        if (outputSheet == null) {
+            System.err.println("Skipping invoicing details sheet: output sheet not found.");
             return;
         }
+        copyServiceHoursToSheet(inputWorkbook, outputSheet, 0, serviceTeam, invoicingSheetNameES, invoicingSheetName, ajustesSheetName, facturacionSheetName);
+    }
 
-        int outputRowIndex = 0;
+    @Override
+    public int copyServiceHoursToSheet(Workbook inputWorkbook, Sheet outputSheet, int startRowIndex, String serviceTeam,
+                                       String invoicingSheetNameES, String invoicingSheetName, String ajustesSheetName, String facturacionSheetName) {
+        Workbook outputWorkbook = outputSheet.getWorkbook();
+        Sheet inputSheet = inputWorkbook.getSheet(invoicingSheetNameES);
+        if (inputSheet == null) {
+            System.err.println("Skipping invoicing details sheet: input sheet not found.");
+            return startRowIndex;
+        }
 
-        // Create header style (white font, #003399 background)
+        int outputRowIndex = startRowIndex;
+
+        // Create styles
         CellStyle headerStyle = Helper.getHeaderStyle(outputWorkbook);
         CellStyle centerStyle = Helper.getCenterStandardStyle(outputWorkbook);
         CellStyle leftStyle = Helper.getLeftStandardStyle(outputWorkbook);
@@ -76,6 +86,20 @@ public class DefaultExcelWriter implements ExcelWriter {
         CellStyle legalAbsenceStyle = Helper.getLegalAbsenceStyle(outputWorkbook);
         CellStyle weekendStyle = Helper.getWeekendStyle(outputWorkbook);
         CellStyle footerCurrencyStyle = Helper.getFooterCurrencyStyle(outputWorkbook);
+
+        // Team Name Header (if starting a new table in a consolidated sheet)
+        if (startRowIndex > 0) {
+            outputRowIndex++; // Add an empty row before the new table
+            Row teamHeaderRow = outputSheet.createRow(outputRowIndex++);
+            Cell teamCell = teamHeaderRow.createCell(0);
+            teamCell.setCellValue("PROJECT: " + serviceTeam + " (" + invoicingSheetName + ")");
+            CellStyle teamStyle = outputWorkbook.createCellStyle();
+            Font teamFont = outputWorkbook.createFont();
+            teamFont.setBold(true);
+            teamFont.setFontHeightInPoints((short) 14);
+            teamStyle.setFont(teamFont);
+            teamCell.setCellStyle(teamStyle);
+        }
 
         // Create and set custom header row
         Row outputHeaderRow = outputSheet.createRow(outputRowIndex++);
@@ -99,25 +123,30 @@ public class DefaultExcelWriter implements ExcelWriter {
         cellAmount.setCellValue("Cost (Euro) ");
         cellAmount.setCellStyle(headerStyle);
 
+        int dataStartRow = outputRowIndex + 1;
+
         // Iterate through rows in the input sheet
         Map<BigDecimal, List<Row>> maps = getAllData(inputSheet);
         Map<BigDecimal, List<Row>> mapsByServiceTeam = filterRowsByServiceTeam(maps, serviceTeam);
         Map<BigDecimal, Row> mergedMaps = transformRows(inputWorkbook, facturacionSheetName,mapsByServiceTeam);
+        
         // WRITE DATA IN EXCEL FILE
         for (Map.Entry<BigDecimal, Row> entry : mergedMaps.entrySet()) {
             Row row = entry.getValue();
             Row outputRow = outputSheet.createRow(outputRowIndex++);
-            ALL:
             for (int j = 0; j < row.getLastCellNum(); j++) {
                 Cell inputCell = row.getCell(j);
                 Cell outputCell = outputRow.createCell(j);
                 if (inputCell != null) {
                     switch (inputCell.getCellType()) {
                         case NUMERIC:
-                            outputCell.setCellValue(inputCell.getNumericCellValue());
-                            outputCell.setCellStyle(centerStyle);
-                            if (j == 3) {
+                            double numericValue = inputCell.getNumericCellValue();
+                            if (j == 3) { // Rates column
+                                outputCell.setCellValue(Helper.round(numericValue));
                                 outputCell.setCellStyle(currencyStyle);
+                            } else {
+                                outputCell.setCellValue(numericValue);
+                                outputCell.setCellStyle(centerStyle);
                             }
                             break;
                         case STRING:
@@ -130,7 +159,6 @@ public class DefaultExcelWriter implements ExcelWriter {
                                         : "S".equals(value) ? sickLeaveStyle : weekendStyle);
                             else
                                 outputCell.setCellStyle(leftStyle);
-
                             break;
                         default:
                             break;
@@ -142,28 +170,18 @@ public class DefaultExcelWriter implements ExcelWriter {
         }
 
         // Add Cost column
-        int lastColumn = 1;
-        Row row1 = outputSheet.getRow(1);
-        lastColumn = row1!=null? row1.getLastCellNum() - 1 : 1;
-        String letterCost = Helper.getColumnLetter(lastColumn);
-        String letterCost2 = Helper.getColumnLetter(lastColumn + 1);
-        String letterTotalHours = Helper.getColumnLetter(lastColumn);
+        int lastColumn = headers.length + nbrDaysInThisMonths;
+        String letterCostHours = Helper.getColumnLetter(lastColumn);
+        String letterRate = "D";
 
-        for (Row row : outputSheet) {
-            if (row.getRowNum() != 0) {
-                // Create a new cell in the last column (new column)
+        for (int r = dataStartRow - 1; r < outputRowIndex; r++) {
+            Row row = outputSheet.getRow(r);
+            if (row != null) {
                 Cell newCell = row.createCell(lastColumn + 1);
                 Cell rateCell = row.getCell(3);
-                Cell descCell = row.getCell(1);
-                if(rateCell!=null && CellType.NUMERIC.equals(rateCell.getCellType()) && rateCell.getNumericCellValue() != 0) {
-                    // Create formula: D(row_number) * last_column
-                    String formula = "IF(D" + (row.getRowNum() + 1) + "=0,1,D" + (row.getRowNum() + 1) + ")" +
-                            "*IF(" + letterCost + (row.getRowNum() + 1) + "=0,1," + letterCost + (row.getRowNum() + 1) + ")";
+                if (rateCell != null && CellType.NUMERIC.equals(rateCell.getCellType()) && rateCell.getNumericCellValue() != 0) {
+                    String formula = "ROUND(" + letterRate + (row.getRowNum() + 1) + "*" + letterCostHours + (row.getRowNum() + 1) + ", 2)";
                     newCell.setCellFormula(formula);
-                } else {
-                    if(descCell != null) {
-                        newCell.setCellValue(descCell.getStringCellValue());
-                    }
                 }
                 newCell.setCellStyle(currencyStyle);
             }
@@ -189,68 +207,57 @@ public class DefaultExcelWriter implements ExcelWriter {
 
             Cell cellD = outputRow.createCell(3);
             BigDecimal hourlyRate = new BigDecimal(row.getCell(15).getNumericCellValue());
-            cellD.setCellValue(hourlyRate.doubleValue());
+            cellD.setCellValue(Helper.round(hourlyRate.doubleValue()));
             cellD.setCellStyle(currencyStyle);
 
             Cell cellE = outputRow.createCell(4);
             cellE.setCellValue(row.getCell(12).getNumericCellValue());
             cellE.setCellStyle(centerStyle);
 
-            int lastCol = headers.length + nbrDaysInThisMonths;
-            for (int i = headers.length + 1; i < lastCol; i++) {
+            for (int i = headers.length + 1; i < lastColumn; i++) {
                 Cell cellM = outputRow.createCell(i);
                 cellM.setCellValue("");
                 cellM.setCellStyle(centerStyle);
             }
 
-            Cell cellAdj = outputRow.createCell(lastCol);
-            Cell cellCost = outputRow.createCell(lastCol + 1);
-
-            // Working Hours (from column 12)
+            Cell cellAdj = outputRow.createCell(lastColumn);
             BigDecimal workingHours = new BigDecimal(row.getCell(12).getNumericCellValue());
             cellAdj.setCellValue(workingHours.doubleValue());
             cellAdj.setCellStyle(centerStyle);
 
-            // **FIXED COST CALCULATION**
+            Cell cellCost = outputRow.createCell(lastColumn + 1);
             if (workingHours.compareTo(BigDecimal.ZERO) == 0) {
-                // If working hours = 0, use the initial cost value from column 16
-                cellCost.setCellValue(row.getCell(16).getNumericCellValue());
+                cellCost.setCellValue(Helper.round(row.getCell(16).getNumericCellValue()));
             } else {
-                // If working hours != 0, calculate: hours * hourly rate
-                cellCost.setCellValue(workingHours.multiply(hourlyRate).doubleValue());
+                cellCost.setCellValue(Helper.round(workingHours.multiply(hourlyRate).doubleValue()));
             }
-
             cellCost.setCellStyle(currencyStyle);
         }
 
-        // ADD TOTAL ROW
-        Row lastRow = outputSheet.createRow(outputRowIndex);
-        if(lastRow !=null && lastColumn >2) {
-            Cell cellTotal = lastRow.createCell(lastColumn - 2) ;
+        // ADD TOTAL ROW FOR THIS TABLE
+        Row totalRow = outputSheet.createRow(outputRowIndex++);
+        Cell cellTotalLabel = totalRow.createCell(lastColumn - 2);
+        cellTotalLabel.setCellValue("Total " + serviceTeam);
+        cellTotalLabel.setCellStyle(headerStyle);
+        outputSheet.addMergedRegion(new CellRangeAddress(totalRow.getRowNum(), totalRow.getRowNum(), lastColumn - 2, lastColumn - 1));
 
-            cellTotal.setCellValue("Total");
-            cellTotal.setCellStyle(headerStyle);
-            outputSheet.addMergedRegion(new CellRangeAddress(
-                    outputRowIndex, // First row (0-based)
-                    outputRowIndex, // Last row (0-based)
-                    lastColumn - 2, // First column (0-based)
-                    lastColumn - 1  // Last column (0-based)
-            ));
-        }
-        Cell cellTotalHours = lastRow.createCell(lastColumn);
-        String formula = "SUM(" + letterTotalHours + "2:" + letterTotalHours + (outputRowIndex) + ")";
-        cellTotalHours.setCellFormula(formula);
+        Cell cellTotalHours = totalRow.createCell(lastColumn);
+        String formulaHours = "SUM(" + letterCostHours + dataStartRow + ":" + letterCostHours + (outputRowIndex - 1) + ")";
+        cellTotalHours.setCellFormula(formulaHours);
         cellTotalHours.setCellStyle(headerStyle);
 
-        Cell cellTotalCost = lastRow.createCell(lastColumn + 1);
-        BigDecimal total = getTotalServiceTeam(inputWorkbook,serviceTeam,facturacionSheetName);
-        cellTotalCost.setCellValue(total.doubleValue());
+        Cell cellTotalCost = totalRow.createCell(lastColumn + 1);
+        String letterTotalCost = Helper.getColumnLetter(lastColumn + 1);
+        String formulaCost = "SUM(" + letterTotalCost + dataStartRow + ":" + letterTotalCost + (outputRowIndex - 1) + ")";
+        cellTotalCost.setCellFormula(formulaCost);
         cellTotalCost.setCellStyle(footerCurrencyStyle);
 
-        // Auto-size columns after all data is written
-        for (int col = 0; col < 40; col++) { // Adjust up to column G (index 6)
+        // Auto-size
+        for (int col = 0; col < lastColumn + 2; col++) {
             outputSheet.autoSizeColumn(col);
         }
+
+        return outputRowIndex;
     }
 
     private Map<BigDecimal, List<Row>> getAllData(Sheet inputSheet) {
@@ -356,7 +363,7 @@ public class DefaultExcelWriter implements ExcelWriter {
 
                 if(!description.isEmpty()) {
                     BigDecimal exactRate = getExactValueFromSheet(inputWorkbook, sheetNameEs, description,6);
-                    thirdCell.setCellValue(exactRate.doubleValue());
+                    thirdCell.setCellValue(Helper.round(exactRate.doubleValue()));
                 }
                 thirdCell.setCellStyle(currencyStyle);
             }
@@ -382,7 +389,7 @@ public class DefaultExcelWriter implements ExcelWriter {
                                 // Evaluate the formula cell to get its numeric value
                                 CellValue cellValue = evaluator.evaluate(hoursCell);
                                 BigDecimal numericValue = BigDecimal.valueOf(cellValue.getNumberValue());
-                                outputCell.setCellValue(numericValue.doubleValue());
+                                outputCell.setCellValue(Helper.round(numericValue.doubleValue()));
                                 break;
                             default:
                                 outputCell.setCellValue(hoursCell.getStringCellValue());

@@ -2,8 +2,8 @@ package invoicing.service.month;
 
 import invoicing.Helper.Helper;
 import invoicing.service.month.impl.*;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.File;
@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.StringJoiner;
 
 import static invoicing.service.month.ExcelFileNameGenerator.*;
 
@@ -69,6 +70,7 @@ public class ExecuteService {
             List<String> fullServiceTeamNames = serviceTeamExtractor.extractFullServiceTeamNames(facturacionSheet, inputWorkbook);
             List<String> serviceTeamNames = serviceTeamExtractor.extractServiceTeamNames(fullServiceTeamNames);
 
+            // 1. GENERATE SEPARATE FILES
             for (String serviceTeam : serviceTeamNames) {
                 // Collect month names for this run
                 List<String> monthNames = new ArrayList<>();
@@ -97,6 +99,84 @@ public class ExecuteService {
                     Helper.writeWorkbook(outputWorkbook, outputFileName);
                 }
             }
+
+            // 2. GENERATE CONSOLIDATED FILE (ONE SHEET, TABLES UNDER EACH OTHER)
+            String consolidatedFileName = outputDirectory + "/Consolidated_Month_Forecast_" + currentMonthSpanish + ".xlsx";
+            try (Workbook consolidatedWorkbook = new XSSFWorkbook()) {
+                Sheet allTeamsSheet = consolidatedWorkbook.createSheet("All Teams Forecast");
+                int currentRow = 0;
+                List<Integer> teamTotalCostRows = new ArrayList<>();
+                List<Integer> teamTotalHoursRows = new ArrayList<>();
+                int costColumnIndex = -1;
+                int hoursColumnIndex = -1;
+
+                for (String serviceTeam : serviceTeamNames) {
+                    for (int i = 0; i < monthsToProcess; i++) {
+                        LocalDate dateForSheet = currentDate.plusMonths(i);
+                        String monthNameEng = dateProvider.getMonthNameEnglish(dateForSheet);
+                        String monthNameSpa = dateProvider.getMonthNameSpanish(dateForSheet);
+
+                        currentRow = excelWriter.copyServiceHoursToSheet(
+                                inputWorkbook,
+                                allTeamsSheet,
+                                currentRow,
+                                serviceTeam,
+                                SHEET_HORAS_SERVICIO + " " + monthNameSpa,
+                                monthNameEng,
+                                SHEET_AJUSTES,
+                                SHEET_FACTURACIÓN + " " + monthNameSpa
+                        );
+                        
+                        // After copying, the last row of the table is currentRow - 1
+                        // We need to keep track of these rows for the final grand total
+                        teamTotalCostRows.add(currentRow); 
+                        
+                        // Find cost and hours columns (they are at the end)
+                        if (costColumnIndex == -1) {
+                            Row lastRow = allTeamsSheet.getRow(currentRow - 1);
+                            if (lastRow != null) {
+                                costColumnIndex = lastRow.getLastCellNum() - 1;
+                                hoursColumnIndex = costColumnIndex - 1;
+                            }
+                        }
+                    }
+                }
+                
+                // Add Grand Total at the bottom of the consolidated sheet
+                if (currentRow > 0 && costColumnIndex != -1) {
+                    currentRow += 2;
+                    Row grandTotalRow = allTeamsSheet.createRow(currentRow++);
+                    
+                    CellStyle headerStyle = Helper.getHeaderStyle(consolidatedWorkbook);
+                    CellStyle footerCurrencyStyle = Helper.getFooterCurrencyStyle(consolidatedWorkbook);
+                    
+                    Cell labelCell = grandTotalRow.createCell(hoursColumnIndex - 2);
+                    labelCell.setCellValue("GRAND TOTAL (ALL PROJECTS)");
+                    labelCell.setCellStyle(headerStyle);
+                    allTeamsSheet.addMergedRegion(new CellRangeAddress(grandTotalRow.getRowNum(), grandTotalRow.getRowNum(), hoursColumnIndex - 2, hoursColumnIndex - 1));
+                    
+                    // Sum of all "Total" rows for Hours
+                    Cell grandHoursCell = grandTotalRow.createCell(hoursColumnIndex);
+                    StringJoiner hoursFormula = new StringJoiner("+");
+                    for (Integer rowIdx : teamTotalCostRows) {
+                        hoursFormula.add(Helper.getColumnLetter(hoursColumnIndex) + rowIdx);
+                    }
+                    grandHoursCell.setCellFormula(hoursFormula.toString());
+                    grandHoursCell.setCellStyle(headerStyle);
+                    
+                    // Sum of all "Total" rows for Cost
+                    Cell grandCostCell = grandTotalRow.createCell(costColumnIndex);
+                    StringJoiner costFormula = new StringJoiner("+");
+                    for (Integer rowIdx : teamTotalCostRows) {
+                        costFormula.add(Helper.getColumnLetter(costColumnIndex) + rowIdx);
+                    }
+                    grandCostCell.setCellFormula(costFormula.toString());
+                    grandCostCell.setCellStyle(footerCurrencyStyle);
+                }
+                
+                Helper.writeWorkbook(consolidatedWorkbook, consolidatedFileName);
+            }
+
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -111,10 +191,5 @@ public class ExecuteService {
                 new DefaultExcelWriter()
         );
         processor.process(inputExcelFilePath, outputExcelsFilePath, monthsToProcess);
-    }
-    
-    // Overload for backward compatibility if needed, defaulting to 3 months
-    public static void executeScript(String inputExcelFilePath, String outputExcelsFilePath) throws Exception {
-        executeScript(inputExcelFilePath, outputExcelsFilePath, 3);
     }
 }

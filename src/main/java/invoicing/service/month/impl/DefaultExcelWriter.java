@@ -1,6 +1,5 @@
 package invoicing.service.month.impl;
 
-
 import invoicing.service.month.ExcelWriter;
 import invoicing.Helper.CogsHelper;
 import invoicing.entities.CogsRecord;
@@ -36,7 +35,6 @@ public class DefaultExcelWriter implements ExcelWriter {
     private List<Row> getAdjustmentSheetData(Workbook inputWorkbook, String ajustesSheetName, String serviceTeam, int month) {
         Sheet inputSheet = inputWorkbook.getSheet(ajustesSheetName);
         List<Row> rows = new ArrayList<>();
-        // Copy data rows where column E matches serviceTeam
         for (Row inputRow : inputSheet) {
             if (inputRow.getRowNum() == 0) {
                 continue;
@@ -54,27 +52,15 @@ public class DefaultExcelWriter implements ExcelWriter {
     @Override
     public void copyServiceHoursSheetData(Workbook inputWorkbook, Workbook outputWorkbook, String serviceTeam,
                                           String invoicingSheetNameES, String invoicingSheetName, String ajustesSheetName, String facturacionSheetName) {
+        Sheet inputSheet = inputWorkbook.getSheet(invoicingSheetNameES);
         Sheet outputSheet = outputWorkbook.getSheet(invoicingSheetName);
-        if (outputSheet == null) {
-            System.err.println("Skipping invoicing details sheet: output sheet not found.");
+        if (inputSheet == null || outputSheet == null) {
+            System.err.println("Skipping invoicing details sheet: input or output sheet not found.");
             return;
         }
-        copyServiceHoursToSheet(inputWorkbook, outputSheet, 0, serviceTeam, invoicingSheetNameES, invoicingSheetName, ajustesSheetName, facturacionSheetName);
-    }
 
-    @Override
-    public int copyServiceHoursToSheet(Workbook inputWorkbook, Sheet outputSheet, int startRowIndex, String serviceTeam,
-                                       String invoicingSheetNameES, String invoicingSheetName, String ajustesSheetName, String facturacionSheetName) {
-        Workbook outputWorkbook = outputSheet.getWorkbook();
-        Sheet inputSheet = inputWorkbook.getSheet(invoicingSheetNameES);
-        if (inputSheet == null) {
-            System.err.println("Skipping invoicing details sheet: input sheet not found.");
-            return startRowIndex;
-        }
+        int outputRowIndex = 0;
 
-        int outputRowIndex = startRowIndex;
-
-        // Create styles
         CellStyle headerStyle = Helper.getHeaderStyle(outputWorkbook);
         CellStyle centerStyle = Helper.getCenterStandardStyle(outputWorkbook);
         CellStyle leftStyle = Helper.getLeftStandardStyle(outputWorkbook);
@@ -87,21 +73,6 @@ public class DefaultExcelWriter implements ExcelWriter {
         CellStyle weekendStyle = Helper.getWeekendStyle(outputWorkbook);
         CellStyle footerCurrencyStyle = Helper.getFooterCurrencyStyle(outputWorkbook);
 
-        // Team Name Header (if starting a new table in a consolidated sheet)
-        if (startRowIndex > 0) {
-            outputRowIndex++; // Add an empty row before the new table
-            Row teamHeaderRow = outputSheet.createRow(outputRowIndex++);
-            Cell teamCell = teamHeaderRow.createCell(0);
-            teamCell.setCellValue("PROJECT: " + serviceTeam + " (" + invoicingSheetName + ")");
-            CellStyle teamStyle = outputWorkbook.createCellStyle();
-            Font teamFont = outputWorkbook.createFont();
-            teamFont.setBold(true);
-            teamFont.setFontHeightInPoints((short) 14);
-            teamStyle.setFont(teamFont);
-            teamCell.setCellStyle(teamStyle);
-        }
-
-        // Create and set custom header row
         Row outputHeaderRow = outputSheet.createRow(outputRowIndex++);
         String[] headers = {"Empl. N°", "Person", "Category", "Rates"};
         for (int i = 0; i < headers.length; i++) {
@@ -123,14 +94,10 @@ public class DefaultExcelWriter implements ExcelWriter {
         cellAmount.setCellValue("Cost (Euro) ");
         cellAmount.setCellStyle(headerStyle);
 
-        int dataStartRow = outputRowIndex + 1;
-
-        // Iterate through rows in the input sheet
         Map<BigDecimal, List<Row>> maps = getAllData(inputSheet);
         Map<BigDecimal, List<Row>> mapsByServiceTeam = filterRowsByServiceTeam(maps, serviceTeam);
-        Map<BigDecimal, Row> mergedMaps = transformRows(inputWorkbook, facturacionSheetName,mapsByServiceTeam);
-        
-        // WRITE DATA IN EXCEL FILE
+        Map<BigDecimal, Row> mergedMaps = transformRows(inputWorkbook, facturacionSheetName, mapsByServiceTeam);
+
         for (Map.Entry<BigDecimal, Row> entry : mergedMaps.entrySet()) {
             Row row = entry.getValue();
             Row outputRow = outputSheet.createRow(outputRowIndex++);
@@ -140,13 +107,10 @@ public class DefaultExcelWriter implements ExcelWriter {
                 if (inputCell != null) {
                     switch (inputCell.getCellType()) {
                         case NUMERIC:
-                            double numericValue = inputCell.getNumericCellValue();
-                            if (j == 3) { // Rates column
-                                outputCell.setCellValue(Helper.round(numericValue));
+                            outputCell.setCellValue(inputCell.getNumericCellValue());
+                            outputCell.setCellStyle(centerStyle);
+                            if (j == 3) {
                                 outputCell.setCellStyle(currencyStyle);
-                            } else {
-                                outputCell.setCellValue(numericValue);
-                                outputCell.setCellStyle(centerStyle);
                             }
                             break;
                         case STRING:
@@ -169,25 +133,30 @@ public class DefaultExcelWriter implements ExcelWriter {
             }
         }
 
-        // Add Cost column
-        int lastColumn = headers.length + nbrDaysInThisMonths;
-        String letterCostHours = Helper.getColumnLetter(lastColumn);
-        String letterRate = "D";
+        int lastColumn = 1;
+        Row row1 = outputSheet.getRow(1);
+        lastColumn = row1 != null ? row1.getLastCellNum() - 1 : 1;
+        String letterCost = Helper.getColumnLetter(lastColumn);
+        String letterTotalHours = Helper.getColumnLetter(lastColumn);
 
-        for (int r = dataStartRow - 1; r < outputRowIndex; r++) {
-            Row row = outputSheet.getRow(r);
-            if (row != null) {
+        for (Row row : outputSheet) {
+            if (row.getRowNum() != 0) {
                 Cell newCell = row.createCell(lastColumn + 1);
                 Cell rateCell = row.getCell(3);
+                Cell descCell = row.getCell(1);
                 if (rateCell != null && CellType.NUMERIC.equals(rateCell.getCellType()) && rateCell.getNumericCellValue() != 0) {
-                    String formula = "ROUND(" + letterRate + (row.getRowNum() + 1) + "*" + letterCostHours + (row.getRowNum() + 1) + ", 2)";
+                    String formula = "IF(D" + (row.getRowNum() + 1) + "=0,1,D" + (row.getRowNum() + 1) + ")" +
+                            "*IF(" + letterCost + (row.getRowNum() + 1) + "=0,1," + letterCost + (row.getRowNum() + 1) + ")";
                     newCell.setCellFormula(formula);
+                } else {
+                    if (descCell != null) {
+                        newCell.setCellValue(descCell.getStringCellValue());
+                    }
                 }
                 newCell.setCellStyle(currencyStyle);
             }
         }
 
-        // ADD ADJUSTMENT - FIXED SECTION
         int month = Helper.getMonthFromSheetName(invoicingSheetName);
         List<Row> AjustesRows = getAdjustmentSheetData(inputWorkbook, ajustesSheetName, serviceTeam, month);
         for (Row row : AjustesRows) {
@@ -214,18 +183,20 @@ public class DefaultExcelWriter implements ExcelWriter {
             cellE.setCellValue(row.getCell(12).getNumericCellValue());
             cellE.setCellStyle(centerStyle);
 
-            for (int i = headers.length + 1; i < lastColumn; i++) {
+            int lastCol = headers.length + nbrDaysInThisMonths;
+            for (int i = headers.length + 1; i < lastCol; i++) {
                 Cell cellM = outputRow.createCell(i);
                 cellM.setCellValue("");
                 cellM.setCellStyle(centerStyle);
             }
 
-            Cell cellAdj = outputRow.createCell(lastColumn);
+            Cell cellAdj = outputRow.createCell(lastCol);
+            Cell cellCost = outputRow.createCell(lastCol + 1);
+
             BigDecimal workingHours = new BigDecimal(row.getCell(12).getNumericCellValue());
             cellAdj.setCellValue(workingHours.doubleValue());
             cellAdj.setCellStyle(centerStyle);
 
-            Cell cellCost = outputRow.createCell(lastColumn + 1);
             if (workingHours.compareTo(BigDecimal.ZERO) == 0) {
                 cellCost.setCellValue(Helper.round(row.getCell(16).getNumericCellValue()));
             } else {
@@ -234,76 +205,226 @@ public class DefaultExcelWriter implements ExcelWriter {
             cellCost.setCellStyle(currencyStyle);
         }
 
-        // ADD TOTAL ROW FOR THIS TABLE
-        Row totalRow = outputSheet.createRow(outputRowIndex++);
-        Cell cellTotalLabel = totalRow.createCell(lastColumn - 2);
-        cellTotalLabel.setCellValue("Total " + serviceTeam);
-        cellTotalLabel.setCellStyle(headerStyle);
-        outputSheet.addMergedRegion(new CellRangeAddress(totalRow.getRowNum(), totalRow.getRowNum(), lastColumn - 2, lastColumn - 1));
-
-        Cell cellTotalHours = totalRow.createCell(lastColumn);
-        String formulaHours = "SUM(" + letterCostHours + dataStartRow + ":" + letterCostHours + (outputRowIndex - 1) + ")";
+        // ADD TOTAL ROW
+        Row lastRow = outputSheet.createRow(outputRowIndex);
+        if (lastRow != null && lastColumn > 2) {
+            Cell cellTotal = lastRow.createCell(lastColumn - 2);
+            cellTotal.setCellValue("Total");
+            cellTotal.setCellStyle(headerStyle);
+            outputSheet.addMergedRegion(new CellRangeAddress(
+                    outputRowIndex,
+                    outputRowIndex,
+                    lastColumn - 2,
+                    lastColumn - 1
+            ));
+        }
+        Cell cellTotalHours = lastRow.createCell(lastColumn);
+        String formulaHours = "SUM(" + letterTotalHours + "2:" + letterTotalHours + (outputRowIndex) + ")";
         cellTotalHours.setCellFormula(formulaHours);
         cellTotalHours.setCellStyle(headerStyle);
 
-        Cell cellTotalCost = totalRow.createCell(lastColumn + 1);
+        Cell cellTotalCost = lastRow.createCell(lastColumn + 1);
         String letterTotalCost = Helper.getColumnLetter(lastColumn + 1);
-        String formulaCost = "SUM(" + letterTotalCost + dataStartRow + ":" + letterTotalCost + (outputRowIndex - 1) + ")";
+        String formulaCost = "SUM(" + letterTotalCost + "2:" + letterTotalCost + (outputRowIndex) + ")";
         cellTotalCost.setCellFormula(formulaCost);
         cellTotalCost.setCellStyle(footerCurrencyStyle);
 
-        // Auto-size
-        for (int col = 0; col < lastColumn + 2; col++) {
+        for (int col = 0; col < 40; col++) {
             outputSheet.autoSizeColumn(col);
         }
+    }
 
-        return outputRowIndex;
+    @Override
+    public int copyServiceHoursToConsolidatedSheet(
+            Workbook inputWorkbook,
+            Sheet consolidatedSheet,
+            int startRow,
+            String serviceTeam,
+            String invoicingSheetNameES,
+            String invoicingSheetNameEN,
+            String ajustesSheetName,
+            String facturacionSheetName
+    ) {
+        Sheet inputSheet = inputWorkbook.getSheet(invoicingSheetNameES);
+        if (inputSheet == null) {
+            System.err.println("Skipping consolidated sheet: input sheet not found: " + invoicingSheetNameES);
+            return startRow;
+        }
+
+        Workbook wb = consolidatedSheet.getWorkbook();
+        CellStyle headerStyle         = Helper.getHeaderStyle(wb);
+        CellStyle leftStyle           = Helper.getLeftStandardStyle(wb);
+        CellStyle centerStyle         = Helper.getCenterStandardStyle(wb);
+        CellStyle currencyStyle       = Helper.getCurrencyStyle(wb);
+        CellStyle footerCurrencyStyle = Helper.getFooterCurrencyStyle(wb);
+
+        int rowIdx = startRow;
+
+        // ── 5-column header ───────────────────────────────────────────────────
+        Row headerRow = consolidatedSheet.createRow(rowIdx++);
+        String[] headers = {"Empl. N°", "Person", "Category", "Working Hours", "Cost (Euro)"};
+        for (int c = 0; c < headers.length; c++) {
+            Cell cell = headerRow.createCell(c);
+            cell.setCellValue(headers[c]);
+            cell.setCellStyle(headerStyle);
+        }
+
+        // ── build employee data ───────────────────────────────────────────────
+        Map<BigDecimal, List<Row>> allData    = getAllData(inputSheet);
+        Map<BigDecimal, List<Row>> teamData   = filterRowsByServiceTeam(allData, serviceTeam);
+        Map<BigDecimal, Row>       mergedData = transformRows(inputWorkbook, facturacionSheetName, teamData);
+
+        int nbrDaysInThisMonth    = Helper.numberOfDays(invoicingSheetNameEN);
+        int hoursColInTransformed = 4 + nbrDaysInThisMonth;
+
+        List<Integer> dataRowIndices = new ArrayList<>();
+
+        for (Map.Entry<BigDecimal, Row> entry : mergedData.entrySet()) {
+            Row srcRow = entry.getValue();
+            Row outRow = consolidatedSheet.createRow(rowIdx);
+            dataRowIndices.add(rowIdx);
+            rowIdx++;
+
+            // Col 0 – Empl. N°
+            Cell empCell = outRow.createCell(0);
+            empCell.setCellValue(srcRow.getCell(0) != null ? srcRow.getCell(0).getNumericCellValue() : 0);
+            empCell.setCellStyle(centerStyle);
+
+            // Col 1 – Person
+            Cell nameCell = outRow.createCell(1);
+            nameCell.setCellValue(srcRow.getCell(1) != null ? srcRow.getCell(1).getStringCellValue() : "");
+            nameCell.setCellStyle(leftStyle);
+
+            // Col 2 – Category
+            Cell catCell = outRow.createCell(2);
+            catCell.setCellValue(srcRow.getCell(2) != null ? srcRow.getCell(2).getStringCellValue() : "");
+            catCell.setCellStyle(leftStyle);
+
+            // Col 3 – Working Hours
+            double hours = 0;
+            Cell srcHours = srcRow.getCell(hoursColInTransformed);
+            if (srcHours != null && srcHours.getCellType() == CellType.NUMERIC) {
+                hours = srcHours.getNumericCellValue();
+            }
+            Cell hoursCell = outRow.createCell(3);
+            hoursCell.setCellValue(hours);
+            hoursCell.setCellStyle(currencyStyle);
+
+            // Col 4 – Cost (rate × hours)
+            double rate = srcRow.getCell(3) != null ? srcRow.getCell(3).getNumericCellValue() : 0;
+            Cell costCell = outRow.createCell(4);
+            if (rate != 0) {
+                costCell.setCellValue(Helper.round(rate * hours));
+            } else {
+                costCell.setCellValue("");
+            }
+            costCell.setCellStyle(currencyStyle);
+        }
+
+        // ── adjustment rows ───────────────────────────────────────────────────
+        int month = Helper.getMonthFromSheetName(invoicingSheetNameEN);
+        List<Row> adjustments = getAdjustmentSheetData(inputWorkbook, ajustesSheetName, serviceTeam, month);
+
+        for (Row adjRow : adjustments) {
+            Row outRow = consolidatedSheet.createRow(rowIdx);
+            dataRowIndices.add(rowIdx);
+            rowIdx++;
+
+            outRow.createCell(0).setCellStyle(centerStyle);
+
+            Cell descCell = outRow.createCell(1);
+            descCell.setCellValue(adjRow.getCell(6) != null ? adjRow.getCell(6).getStringCellValue() : "");
+            descCell.setCellStyle(leftStyle);
+
+            outRow.createCell(2).setCellStyle(centerStyle);
+
+            BigDecimal workingHours = new BigDecimal(adjRow.getCell(12).getNumericCellValue());
+            Cell adjHoursCell = outRow.createCell(3);
+            adjHoursCell.setCellValue(workingHours.doubleValue());
+            adjHoursCell.setCellStyle(currencyStyle);
+
+            BigDecimal hourlyRate = new BigDecimal(adjRow.getCell(15).getNumericCellValue());
+            Cell adjCostCell = outRow.createCell(4);
+            if (workingHours.compareTo(BigDecimal.ZERO) == 0) {
+                adjCostCell.setCellValue(Helper.round(adjRow.getCell(16).getNumericCellValue()));
+            } else {
+                adjCostCell.setCellValue(Helper.round(workingHours.multiply(hourlyRate).doubleValue()));
+            }
+            adjCostCell.setCellStyle(currencyStyle);
+        }
+
+        // ── Total row ─────────────────────────────────────────────────────────
+        Row totalRow = consolidatedSheet.createRow(rowIdx);
+        rowIdx++;
+
+        Cell totalLabelCell = totalRow.createCell(0);
+        totalLabelCell.setCellValue("Total " + serviceTeam);
+        totalLabelCell.setCellStyle(headerStyle);
+        consolidatedSheet.addMergedRegion(new CellRangeAddress(
+                totalRow.getRowNum(), totalRow.getRowNum(), 0, 2));
+
+        // Col 3 – SUM of hours
+        StringBuilder hoursFormula = new StringBuilder("SUM(");
+        for (int i = 0; i < dataRowIndices.size(); i++) {
+            hoursFormula.append("D").append(dataRowIndices.get(i) + 1); // 1-based
+            if (i < dataRowIndices.size() - 1) hoursFormula.append(",");
+        }
+        hoursFormula.append(")");
+        Cell totalHoursCell = totalRow.createCell(3);
+        totalHoursCell.setCellFormula(hoursFormula.toString());
+        totalHoursCell.setCellStyle(headerStyle);
+
+        // Col 4 – SUM of cost
+        StringBuilder costFormula = new StringBuilder("SUM(");
+        for (int i = 0; i < dataRowIndices.size(); i++) {
+            costFormula.append("E").append(dataRowIndices.get(i) + 1);
+            if (i < dataRowIndices.size() - 1) costFormula.append(",");
+        }
+        costFormula.append(")");
+        Cell totalCostCell = totalRow.createCell(4);
+        totalCostCell.setCellFormula(costFormula.toString());
+        totalCostCell.setCellStyle(footerCurrencyStyle);
+
+        // ── two blank separator rows ──────────────────────────────────────────
+        consolidatedSheet.createRow(rowIdx++);
+        consolidatedSheet.createRow(rowIdx++);
+
+        return rowIdx;
     }
 
     private Map<BigDecimal, List<Row>> getAllData(Sheet inputSheet) {
-
         Map<BigDecimal, List<Row>> maps = new HashMap<>();
         BigDecimal lastId = null;
 
         for (Row row : inputSheet) {
-
-            Cell empIdCell = row.getCell(0);
+            Cell empIdCell   = row.getCell(0);
             Cell empNameCell = row.getCell(1);
 
             if (empIdCell != null && empNameCell != null) {
-
                 lastId = BigDecimal.valueOf(empIdCell.getNumericCellValue());
-
                 List<Row> list = new ArrayList<>();
                 list.add(row);
-
                 maps.put(lastId, list);
-
             } else if (!Helper.isRowEmpty(row) && lastId != null) {
-
                 List<Row> list = maps.get(lastId);
-
                 if (list != null) {
                     list.add(row);
                 }
             }
         }
-
         return maps;
     }
-
 
     private static Map<BigDecimal, List<Row>> filterRowsByServiceTeam(Map<BigDecimal, List<Row>> inputMap, String serviceTeam) {
         Map<BigDecimal, List<Row>> filteredMap = new HashMap<>();
 
         for (Map.Entry<BigDecimal, List<Row>> entry : inputMap.entrySet()) {
-            BigDecimal key = entry.getKey();
-            List<Row> rows = entry.getValue();
+            BigDecimal key  = entry.getKey();
+            List<Row>  rows = entry.getValue();
 
-            // Extract the first row and filter rows based on the second cell condition
             List<Row> filteredRows = rows.stream().filter(row -> {
-                Cell secondCell = row.getCell(1); // Second cell (index 1)
-                boolean isFirstRow = rows.indexOf(row) == 0; // Check if it's the first row
+                Cell secondCell = row.getCell(1);
+                boolean isFirstRow = rows.indexOf(row) == 0;
                 boolean isSecondCellEmptyOrMatches = secondCell == null || secondCell.getCellType() == CellType.BLANK
                         || (secondCell.getCellType() == CellType.STRING
                         && secondCell.getStringCellValue().contains(serviceTeam));
@@ -314,69 +435,64 @@ public class DefaultExcelWriter implements ExcelWriter {
                 filteredMap.put(key, filteredRows);
             }
         }
-
         return filteredMap;
     }
 
-    private Map<BigDecimal, Row> transformRows(Workbook inputWorkbook,String sheetNameEs ,Map<BigDecimal, List<Row>> inputMap) {
+    private Map<BigDecimal, Row> transformRows(Workbook inputWorkbook, String sheetNameEs, Map<BigDecimal, List<Row>> inputMap) {
         Map<BigDecimal, Row> resultMap = new HashMap<>();
+
         for (Map.Entry<BigDecimal, List<Row>> entry : inputMap.entrySet()) {
-            BigDecimal key = entry.getKey();
-            List<Row> rows = entry.getValue();
+            BigDecimal key  = entry.getKey();
+            List<Row>  rows = entry.getValue();
 
             if (rows == null || rows.isEmpty()) {
-                continue; // Skip if the list is empty or null
+                continue;
             }
 
-            // Create a new row for the result
-            Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+            Workbook workbook = new XSSFWorkbook();
             Row newRow = workbook.createSheet().createRow(0);
 
-            // Cell 0: First cell of the first row
             if (!rows.isEmpty()) {
                 Cell firstCell = rows.get(0).getCell(0);
                 newRow.createCell(0).setCellValue(firstCell != null ? firstCell.getNumericCellValue() : 0);
             }
 
-            // Cell 1: Second cell of the first row
             if (!rows.isEmpty() && rows.get(0).getCell(1) != null) {
                 Cell secondCellFirst = rows.get(0).getCell(1);
                 newRow.createCell(1).setCellValue(secondCellFirst.getStringCellValue());
             }
 
-            // Cell 1: Second cell of the first row
             if (!rows.isEmpty() && rows.size() > 1 && rows.get(1) != null && rows.get(1).getCell(1) != null) {
                 Cell secondCellSecond = rows.get(1).getCell(1);
                 BigDecimal input = BigDecimal.valueOf(Helper.getRates(secondCellSecond.getStringCellValue()));
-                List<String>  groupsId = CogsHelper.findGroupIdsByRate(input, FiscalYear.FY25,recogs);
+                List<String> groupsId = CogsHelper.findGroupIdsByRate(input, FiscalYear.FY25, recogs);
                 newRow.createCell(2).setCellValue(groupsId.toString());
-               // newRow.createCell(2).setCellValue(CogsHelper.getCategory(input));
             }
 
-            // RATE COLUMN
             CellStyle currencyStyle = Helper.getCurrencyStyle(workbook);
             if (rows.size() > 1 && rows.get(1).getCell(1) != null) {
                 Cell secondCellSecond = rows.get(1).getCell(1);
                 BigDecimal input = BigDecimal.valueOf(Helper.getRates(secondCellSecond.getStringCellValue()));
-                String description = rows.get(0)!=null && rows.get(0).getCell(1)!=null && CellType.STRING.equals(rows.get(0).getCell(1).getCellType()) && !rows.get(0).getCell(1).getStringCellValue().isEmpty() ? rows.get(0).getCell(1).getStringCellValue():"";
+                String description = rows.get(0) != null && rows.get(0).getCell(1) != null
+                        && CellType.STRING.equals(rows.get(0).getCell(1).getCellType())
+                        && !rows.get(0).getCell(1).getStringCellValue().isEmpty()
+                        ? rows.get(0).getCell(1).getStringCellValue() : "";
                 Cell thirdCell = newRow.createCell(3);
 
-                if(!description.isEmpty()) {
-                    BigDecimal exactRate = getExactValueFromSheet(inputWorkbook, sheetNameEs, description,6);
+                if (!description.isEmpty()) {
+                    BigDecimal exactRate = getExactValueFromSheet(inputWorkbook, sheetNameEs, description, 6);
                     thirdCell.setCellValue(Helper.round(exactRate.doubleValue()));
                 }
                 thirdCell.setCellStyle(currencyStyle);
             }
 
-            // Cells N (N >= 3): Based on the third cell and beyond
             if (rows.size() > 1) {
                 Row teamServiceRow = rows.get(1);
-                Row vacationRow = rows.size() > 2 ? rows.get(2) : null;
-                for (int i = 4; i < teamServiceRow.getLastCellNum() + 4; i++) { // Limit to 10 cells for practicality,
-                    // adjust as needed
-                    Cell hoursCell = teamServiceRow.getCell(i - 2);
+                Row vacationRow    = rows.size() > 2 ? rows.get(2) : null;
+                for (int i = 4; i < teamServiceRow.getLastCellNum() + 4; i++) {
+                    Cell hoursCell    = teamServiceRow.getCell(i - 2);
                     Cell vacationsCell = vacationRow != null ? vacationRow.getCell(i - 2) : null;
-                    Cell outputCell = newRow.createCell(i);
+                    Cell outputCell   = newRow.createCell(i);
                     if (hoursCell != null && hoursCell.getCellType() != CellType.BLANK) {
                         switch (hoursCell.getCellType()) {
                             case NUMERIC:
@@ -385,8 +501,6 @@ public class DefaultExcelWriter implements ExcelWriter {
                             case FORMULA:
                                 Workbook w = teamServiceRow.getSheet().getWorkbook();
                                 FormulaEvaluator evaluator = w.getCreationHelper().createFormulaEvaluator();
-
-                                // Evaluate the formula cell to get its numeric value
                                 CellValue cellValue = evaluator.evaluate(hoursCell);
                                 BigDecimal numericValue = BigDecimal.valueOf(cellValue.getNumberValue());
                                 outputCell.setCellValue(Helper.round(numericValue.doubleValue()));
@@ -406,14 +520,12 @@ public class DefaultExcelWriter implements ExcelWriter {
                                     break;
                                 case STRING:
                                     outputCell.setCellValue(!vacationsCell.getStringCellValue().isEmpty()
-                                            ? vacationsCell.getStringCellValue()
-                                            : "");
+                                            ? vacationsCell.getStringCellValue() : "");
                                     break;
                                 default:
                                     break;
                             }
                         }
-
                     }
                 }
             }
@@ -421,11 +533,10 @@ public class DefaultExcelWriter implements ExcelWriter {
             if (newRow.getCell(2) != null)
                 resultMap.put(key, newRow);
         }
-
         return resultMap;
     }
 
-    public BigDecimal getTotalServiceTeam(Workbook inputWorkbook, String serviceTeam, String sheetName){
+    public BigDecimal getTotalServiceTeam(Workbook inputWorkbook, String serviceTeam, String sheetName) {
         Sheet sheet = inputWorkbook.getSheet(sheetName);
         FormulaEvaluator evaluator = inputWorkbook.getCreationHelper().createFormulaEvaluator();
         if (sheet == null) return BigDecimal.ZERO;
@@ -434,14 +545,17 @@ public class DefaultExcelWriter implements ExcelWriter {
         boolean inProjectBlock = false;
         String projectBlock = "";
         for (Row row : sheet) {
-            Cell projectCell = row.getCell(1); // Column B (index 1)
+            Cell projectCell = row.getCell(1);
             Cell cell0 = row.getCell(0);
-            projectBlock =cell0!=null && CellType.STRING.equals(cell0.getCellType())  && cell0.getStringCellValue() != null && !cell0.getStringCellValue().isEmpty() && cell0.getStringCellValue().equals("Número Empleado") ? projectCell.getStringCellValue() : projectBlock;
-            Cell totalCell = row.getCell(7);  // Column H (index 7)
-            String project = projectCell !=null ? projectCell.getStringCellValue()!=null ? projectCell.getStringCellValue().trim():"":"";
-            BigDecimal val = totalCell!=null? BigDecimal.valueOf(evaluator.evaluate(totalCell).getNumberValue()) : BigDecimal.ZERO;
-            if(project.isEmpty() && val !=BigDecimal.ZERO && projectBlock.contains(serviceTeam)) {
-                total =  val ;
+            projectBlock = cell0 != null && CellType.STRING.equals(cell0.getCellType())
+                    && cell0.getStringCellValue() != null && !cell0.getStringCellValue().isEmpty()
+                    && cell0.getStringCellValue().equals("Número Empleado")
+                    ? projectCell.getStringCellValue() : projectBlock;
+            Cell totalCell = row.getCell(7);
+            String project = projectCell != null ? (projectCell.getStringCellValue() != null ? projectCell.getStringCellValue().trim() : "") : "";
+            BigDecimal val = totalCell != null ? BigDecimal.valueOf(evaluator.evaluate(totalCell).getNumberValue()) : BigDecimal.ZERO;
+            if (project.isEmpty() && val != BigDecimal.ZERO && projectBlock.contains(serviceTeam)) {
+                total = val;
                 break;
             }
             if (projectCell != null && projectCell.getCellType() == CellType.STRING) {
@@ -449,22 +563,25 @@ public class DefaultExcelWriter implements ExcelWriter {
                 if (cellValue.contains(serviceTeam)) {
                     inProjectBlock = true;
                 } else if (inProjectBlock && !cellValue.isEmpty()) {
-                    inProjectBlock = false; // End of project block
+                    inProjectBlock = false;
                 }
             }
         }
         return total;
     }
 
-    public BigDecimal getExactValueFromSheet(Workbook inputWorkbook, String sheetName, String rowDescription, int column){
+    public BigDecimal getExactValueFromSheet(Workbook inputWorkbook, String sheetName, String rowDescription, int column) {
         Sheet sheet = inputWorkbook.getSheet(sheetName);
         FormulaEvaluator evaluator = inputWorkbook.getCreationHelper().createFormulaEvaluator();
         if (sheet == null) return BigDecimal.ZERO;
 
         BigDecimal exactValue = BigDecimal.ZERO;
         for (Row row : sheet) {
-            Cell cellDescription = row.getCell(1); // Column B (index 1)
-            if(cellDescription!=null && CellType.STRING.equals(cellDescription.getCellType())  && cellDescription.getStringCellValue() != null && !cellDescription.getStringCellValue().isEmpty() && cellDescription.getStringCellValue().equals(rowDescription)){
+            Cell cellDescription = row.getCell(1);
+            if (cellDescription != null && CellType.STRING.equals(cellDescription.getCellType())
+                    && cellDescription.getStringCellValue() != null
+                    && !cellDescription.getStringCellValue().isEmpty()
+                    && cellDescription.getStringCellValue().equals(rowDescription)) {
                 Cell cellValue = row.getCell(column);
                 if (cellValue != null && cellValue.getCellType() == CellType.NUMERIC) {
                     exactValue = BigDecimal.valueOf(cellValue.getNumericCellValue());
@@ -473,5 +590,4 @@ public class DefaultExcelWriter implements ExcelWriter {
         }
         return exactValue;
     }
-
 }

@@ -54,9 +54,9 @@ public class ExecuteService {
             System.err.println("Error: File is not an Excel file (.xlsx or .xls): " + file.getAbsolutePath());
             return;
         }
+
         try (FileInputStream fis = new FileInputStream(file);
              Workbook inputWorkbook = new XSSFWorkbook(fis)) {
-
 
             LocalDate currentDate = dateProvider.getCurrentDate(inputExcelFilePath);
             int currentYear = dateProvider.getYear(currentDate);
@@ -94,21 +94,25 @@ public class ExecuteService {
                                 SHEET_FACTURACIÓN + " " + monthNameSpa
                         );
                     }
-                    
+
                     String outputFileName = fileNameGenerator.generateOutputFileName(currentMonth, currentYear, serviceTeam, outputDirectory);
                     Helper.writeWorkbook(outputWorkbook, outputFileName);
                 }
             }
 
-            // 2. GENERATE CONSOLIDATED FILE (ONE SHEET, TABLES UNDER EACH OTHER)
-            String consolidatedFileName = outputDirectory + "/Consolidated_Month_Forecast_" + currentMonthSpanish + ".xlsx";
+            // 2. GENERATE CONSOLIDATED FILE (one sheet, tables stacked under each other)
+            String consolidatedFileName = outputDirectory
+                    + "/Consolidated_Month_Forecast_" + currentMonthSpanish + ".xlsx";
+
             try (Workbook consolidatedWorkbook = new XSSFWorkbook()) {
+
                 Sheet allTeamsSheet = consolidatedWorkbook.createSheet("All Teams Forecast");
+
+                // Track grand-total row positions across all teams (1-based Excel row for each "Total" row)
+                List<Integer> grandTotalHoursRows = new ArrayList<>();
+                List<Integer> grandTotalCostRows  = new ArrayList<>();
+
                 int currentRow = 0;
-                List<Integer> teamTotalCostRows = new ArrayList<>();
-                List<Integer> teamTotalHoursRows = new ArrayList<>();
-                int costColumnIndex = -1;
-                int hoursColumnIndex = -1;
 
                 for (String serviceTeam : serviceTeamNames) {
                     for (int i = 0; i < monthsToProcess; i++) {
@@ -116,64 +120,68 @@ public class ExecuteService {
                         String monthNameEng = dateProvider.getMonthNameEnglish(dateForSheet);
                         String monthNameSpa = dateProvider.getMonthNameSpanish(dateForSheet);
 
-                        currentRow = excelWriter.copyServiceHoursToSheet(
+                        int nextFreeRow = excelWriter.copyServiceHoursToConsolidatedSheet(
                                 inputWorkbook,
                                 allTeamsSheet,
                                 currentRow,
                                 serviceTeam,
                                 SHEET_HORAS_SERVICIO + " " + monthNameSpa,
-                                monthNameEng,
+                                SHEET_SERVICE_HOURS_DETAILS + " " + monthNameEng,
                                 SHEET_AJUSTES,
                                 SHEET_FACTURACIÓN + " " + monthNameSpa
+                                
                         );
-                        
-                        // After copying, the last row of the table is currentRow - 1
-                        // We need to keep track of these rows for the final grand total
-                        teamTotalCostRows.add(currentRow); 
-                        
-                        // Find cost and hours columns (they are at the end)
-                        if (costColumnIndex == -1) {
-                            Row lastRow = allTeamsSheet.getRow(currentRow - 1);
-                            if (lastRow != null) {
-                                costColumnIndex = lastRow.getLastCellNum() - 1;
-                                hoursColumnIndex = costColumnIndex - 1;
-                            }
-                        }
+
+                        // The Total row is 2 blank rows before nextFreeRow (0-based),
+                        // converted to 1-based Excel row: (nextFreeRow - 2) + 1 = nextFreeRow - 1
+                        int totalRowExcel1Based = nextFreeRow - 1;
+                        grandTotalHoursRows.add(totalRowExcel1Based);
+                        grandTotalCostRows.add(totalRowExcel1Based);
+
+                        currentRow = nextFreeRow;
                     }
                 }
-                
-                // Add Grand Total at the bottom of the consolidated sheet
-                if (currentRow > 0 && costColumnIndex != -1) {
-                    currentRow += 2;
-                    Row grandTotalRow = allTeamsSheet.createRow(currentRow++);
-                    
-                    CellStyle headerStyle = Helper.getHeaderStyle(consolidatedWorkbook);
-                    CellStyle footerCurrencyStyle = Helper.getFooterCurrencyStyle(consolidatedWorkbook);
-                    
-                    Cell labelCell = grandTotalRow.createCell(hoursColumnIndex - 2);
+
+                // ── Grand Total row ───────────────────────────────────────────
+                if (currentRow > 0) {
+                    currentRow += 1; // one extra blank before grand total
+
+                    Row grandTotalRow = allTeamsSheet.createRow(currentRow);
+
+                    CellStyle headerStyle         = Helper.getHeaderStyle(consolidatedWorkbook);
+                    CellStyle footerCurrencyStyle  = Helper.getFooterCurrencyStyle(consolidatedWorkbook);
+
+                    // Label spanning cols 0-2
+                    Cell labelCell = grandTotalRow.createCell(0);
                     labelCell.setCellValue("GRAND TOTAL (ALL PROJECTS)");
                     labelCell.setCellStyle(headerStyle);
-                    allTeamsSheet.addMergedRegion(new CellRangeAddress(grandTotalRow.getRowNum(), grandTotalRow.getRowNum(), hoursColumnIndex - 2, hoursColumnIndex - 1));
-                    
-                    // Sum of all "Total" rows for Hours
-                    Cell grandHoursCell = grandTotalRow.createCell(hoursColumnIndex);
+                    allTeamsSheet.addMergedRegion(new CellRangeAddress(
+                            currentRow, currentRow, 0, 2));
+
+                    // Sum of all team "Total" hours (column D = index 3)
                     StringJoiner hoursFormula = new StringJoiner("+");
-                    for (Integer rowIdx : teamTotalCostRows) {
-                        hoursFormula.add(Helper.getColumnLetter(hoursColumnIndex) + rowIdx);
+                    for (Integer rowIdx : grandTotalHoursRows) {
+                        hoursFormula.add("D" + (rowIdx - 1));
                     }
+                    Cell grandHoursCell = grandTotalRow.createCell(3);
                     grandHoursCell.setCellFormula(hoursFormula.toString());
                     grandHoursCell.setCellStyle(headerStyle);
-                    
-                    // Sum of all "Total" rows for Cost
-                    Cell grandCostCell = grandTotalRow.createCell(costColumnIndex);
+
+                    // Sum of all team "Total" cost (column E = index 4)
                     StringJoiner costFormula = new StringJoiner("+");
-                    for (Integer rowIdx : teamTotalCostRows) {
-                        costFormula.add(Helper.getColumnLetter(costColumnIndex) + rowIdx);
+                    for (Integer rowIdx : grandTotalCostRows) {
+                        costFormula.add("E" + (rowIdx - 1));
                     }
+                    Cell grandCostCell = grandTotalRow.createCell(4);
                     grandCostCell.setCellFormula(costFormula.toString());
                     grandCostCell.setCellStyle(footerCurrencyStyle);
                 }
-                
+
+                // Auto-size the 5 consolidated columns
+                for (int col = 0; col < 5; col++) {
+                    allTeamsSheet.autoSizeColumn(col);
+                }
+
                 Helper.writeWorkbook(consolidatedWorkbook, consolidatedFileName);
             }
 

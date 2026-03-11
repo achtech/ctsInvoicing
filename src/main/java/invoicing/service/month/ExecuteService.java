@@ -158,27 +158,31 @@ public class ExecuteService {
                     allTeamsSheet.addMergedRegion(new CellRangeAddress(
                             currentRow, currentRow, 0, 2));
 
-                    // Sum of all team "Total" hours (column D = index 3)
+                    // Sum of all team "Total" hours (column E = index 4)
                     StringJoiner hoursFormula = new StringJoiner("+");
                     for (Integer rowIdx : grandTotalHoursRows) {
-                        hoursFormula.add("D" + (rowIdx - 1));
+                        hoursFormula.add("E" + (rowIdx - 1));
                     }
-                    Cell grandHoursCell = grandTotalRow.createCell(3);
+                    String grandRowNumber = String.valueOf(currentRow + 1);
+                    Cell grandRateCell = grandTotalRow.createCell(3);
+                    grandRateCell.setCellFormula("IF(E" + grandRowNumber + "=0,\"\",F" + grandRowNumber + "/E" + grandRowNumber + ")");
+                    grandRateCell.setCellStyle(footerCurrencyStyle);
+                    Cell grandHoursCell = grandTotalRow.createCell(4);
                     grandHoursCell.setCellFormula(hoursFormula.toString());
                     grandHoursCell.setCellStyle(headerStyle);
 
-                    // Sum of all team "Total" cost (column E = index 4)
+                    // Sum of all team "Total" cost (column F = index 5)
                     StringJoiner costFormula = new StringJoiner("+");
                     for (Integer rowIdx : grandTotalCostRows) {
-                        costFormula.add("E" + (rowIdx - 1));
+                        costFormula.add("F" + (rowIdx - 1));
                     }
-                    Cell grandCostCell = grandTotalRow.createCell(4);
+                    Cell grandCostCell = grandTotalRow.createCell(5);
                     grandCostCell.setCellFormula(costFormula.toString());
                     grandCostCell.setCellStyle(footerCurrencyStyle);
                 }
 
-                // Auto-size the 5 consolidated columns
-                for (int col = 0; col < 5; col++) {
+                // Auto-size the consolidated columns
+                for (int col = 0; col < 6; col++) {
                     allTeamsSheet.autoSizeColumn(col);
                 }
 

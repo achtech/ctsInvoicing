@@ -1,4 +1,8 @@
 # target/
+# Ignore everything under `target/` except `invoicingTool.jar`
+/target/*
+!/target/invoicingTool.jar
+/target/original-InvoicingTool.jar
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

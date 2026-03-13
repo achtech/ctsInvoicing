@@ -1,6 +1,7 @@
 # target/
-# Ignore everything under `target/` except `invoicingTool.jar`
-/target/*
+# Ignore the `target` folder (build outputs)
+/target/
+# Still allow the released jar and explicitly ignore the original jar
 !/target/invoicingTool.jar
 /target/original-InvoicingTool.jar
 !.mvn/wrapper/maven-wrapper.jar

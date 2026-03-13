@@ -67,77 +67,160 @@ public class InputRowProcessor {
      * Processes one row from input file according to the new workflow.
      * Returns RowData with GroupId, hours, and cost.
      */
+    // public RowData processRow(Row row) {
+    //     if (row == null) return null;
+
+    //     // Step 3.1: Extract rate from column C (parse text)
+    //     String columnBText = getStringCellValue(row.getCell(1)); // Column C (index 2)
+    //     String columnCText = getStringCellValue(row.getCell(2)); // Column C (index 2)
+    //     double columnDText = getDoubleCellValue(row.getCell(3)); // Column C (index 2)
+    //     BigDecimal columnGText = getBigDecimalFromCell(row.getCell(6)); // Column C (index 2)
+    //     BigDecimal columnHText = getBigDecimalFromCell(row.getCell(7)); // Column C (index 2)
+
+    //     BigDecimal rateFromInvoice = extractRateFromText(columnCText);
+    //     if(BigDecimal.ZERO.compareTo(rateFromInvoice) == 0){
+    //         if(columnGText!=null && BigDecimal.ZERO.compareTo(columnGText) != 0){
+    //             rateFromInvoice = columnGText;
+    //         }
+    //         else {
+    //             if(columnBText!=null && columnHText!=null && !columnBText.isEmpty() && !columnCText.isEmpty() && columnHText.compareTo(BigDecimal.ZERO) !=0 ){
+    //                 rateFromInvoice = new BigDecimal("1");
+    //             }
+    //         }
+    //     }
+
+    //     // Step 3.2: Look up correct rate and GroupId from reference data
+    //     String groupId = referenceData.getGroupByApproximateRate(rateFromInvoice);
+    //     BigDecimal correctRate = referenceData.getCorrectRateByApproximate(rateFromInvoice);
+    //     if (groupId == null || correctRate == null) {
+    //         System.out.println("Warning: No matching GroupId found for rate: " + rateFromInvoice);
+    //         return null;
+    //     }
+
+    //     // Step 3.3: Extract hours from column D
+    //     double hours = getDoubleCellValue(row.getCell(3)); // Column D (index 3)
+
+    //     // Step 3.4: Extract invoicedRate from column G
+    //     BigDecimal invoicedRate = getBigDecimalFromCell(row.getCell(6)); // Column G (index 6)
+
+    //     // Step 3.5: Extract Cost from column H
+    //     BigDecimal cost = getBigDecimalFromCell(row.getCell(7)); // Column H (index 7)
+    //     if(hours == 0 && correctRate != null && correctRate.doubleValue() == 1){
+    //         hours =correctRate.doubleValue();
+    //     }
+    //     // Step 3.6: Apply correction logic
+    //     if (Math.abs(invoicedRate.doubleValue() - correctRate.doubleValue()) > 0.01) { // invoicedRate != correctRate
+    //         if (invoicedRate.compareTo(BigDecimal.ZERO) == 0.0 && cost.compareTo(BigDecimal.ZERO) != 0.0) {
+    //             // Case a: invoicedRate = 0 and Cost != 0
+    //             hours = cost.doubleValue();
+    //             invoicedRate = new BigDecimal(1.0);
+    //             cost = new BigDecimal(hours * invoicedRate.doubleValue()); // Recalculate cost
+    //         } else if (invoicedRate == new BigDecimal(25.0) || invoicedRate == new BigDecimal(50.0)) {
+    //             // Case c: Special Guardas cases
+    //             correctRate = invoicedRate;
+    //             groupId = invoicedRate == new BigDecimal(25.0) ? "Guardas_25" : "Guardas_50";
+    //             cost = new BigDecimal(hours * correctRate.doubleValue()); // Recalculate cost
+    //         } else {
+    //             // Case b: General case - adjust hours and use correct rate
+    //             hours = hours * invoicedRate.doubleValue() / correctRate.doubleValue();
+    //             invoicedRate = correctRate;
+    //             cost = new BigDecimal(hours * invoicedRate.doubleValue());
+    //         }
+    //     } else {
+    //         // invoicedRate == correctRate, recalculate cost to ensure consistency
+    //         cost = new BigDecimal(hours * correctRate.doubleValue());
+    //     }
+
+    //     // Store for debugging
+    //     processedData.add(new ProcessedDataEntry(groupId, rateFromInvoice, correctRate, 
+    //                                               hours, invoicedRate, cost));
+
+    //     return new RowData(groupId, hours, cost.doubleValue());
+    // }
+
+
     public RowData processRow(Row row) {
-        if (row == null) return null;
+    if (row == null) return null;
 
-        // Step 3.1: Extract rate from column C (parse text)
-        String columnBText = getStringCellValue(row.getCell(1)); // Column C (index 2)
-        String columnCText = getStringCellValue(row.getCell(2)); // Column C (index 2)
-        double columnDText = getDoubleCellValue(row.getCell(3)); // Column C (index 2)
-        BigDecimal columnGText = getBigDecimalFromCell(row.getCell(6)); // Column C (index 2)
-        BigDecimal columnHText = getBigDecimalFromCell(row.getCell(7)); // Column C (index 2)
+    String columnBText = getStringCellValue(row.getCell(1));
+    String columnCText = getStringCellValue(row.getCell(2));
+    double columnDText = getDoubleCellValue(row.getCell(3));
+    BigDecimal columnGText = getBigDecimalFromCell(row.getCell(6));
+    BigDecimal columnHText = getBigDecimalFromCell(row.getCell(7));
 
-        BigDecimal rateFromInvoice = extractRateFromText(columnCText);
-        if(BigDecimal.ZERO.compareTo(rateFromInvoice) == 0){
-            if(columnGText!=null && BigDecimal.ZERO.compareTo(columnGText) != 0){
-                rateFromInvoice = columnGText;
-            }
-            else {
-                if(columnBText!=null && columnHText!=null && !columnBText.isEmpty() && !columnCText.isEmpty() && columnHText.compareTo(BigDecimal.ZERO) !=0 ){
-                    rateFromInvoice = new BigDecimal("1");
-                }
-            }
-        }
-
-        // Step 3.2: Look up correct rate and GroupId from reference data
-        String groupId = referenceData.getGroupByApproximateRate(rateFromInvoice);
-        BigDecimal correctRate = referenceData.getCorrectRateByApproximate(rateFromInvoice);
-        if (groupId == null || correctRate == null) {
-            System.out.println("Warning: No matching GroupId found for rate: " + rateFromInvoice);
-            return null;
-        }
-
-        // Step 3.3: Extract hours from column D
-        double hours = getDoubleCellValue(row.getCell(3)); // Column D (index 3)
-
-        // Step 3.4: Extract invoicedRate from column G
-        BigDecimal invoicedRate = getBigDecimalFromCell(row.getCell(6)); // Column G (index 6)
-
-        // Step 3.5: Extract Cost from column H
-        BigDecimal cost = getBigDecimalFromCell(row.getCell(7)); // Column H (index 7)
-        if(hours == 0 && correctRate != null && correctRate.doubleValue() == 1){
-            hours =correctRate.doubleValue();
-        }
-        // Step 3.6: Apply correction logic
-        if (Math.abs(invoicedRate.doubleValue() - correctRate.doubleValue()) > 0.01) { // invoicedRate != correctRate
-            if (invoicedRate.compareTo(BigDecimal.ZERO) == 0.0 && cost.compareTo(BigDecimal.ZERO) != 0.0) {
-                // Case a: invoicedRate = 0 and Cost != 0
-                hours = cost.doubleValue();
-                invoicedRate = new BigDecimal(1.0);
-                cost = new BigDecimal(hours * invoicedRate.doubleValue()); // Recalculate cost
-            } else if (invoicedRate == new BigDecimal(25.0) || invoicedRate == new BigDecimal(50.0)) {
-                // Case c: Special Guardas cases
-                correctRate = invoicedRate;
-                groupId = invoicedRate == new BigDecimal(25.0) ? "Guardas_25" : "Guardas_50";
-                cost = new BigDecimal(hours * correctRate.doubleValue()); // Recalculate cost
-            } else {
-                // Case b: General case - adjust hours and use correct rate
-                hours = hours * invoicedRate.doubleValue() / correctRate.doubleValue();
-                invoicedRate = correctRate;
-                cost = new BigDecimal(hours * invoicedRate.doubleValue());
-            }
+    BigDecimal rateFromInvoice = extractRateFromText(columnCText);
+    if (BigDecimal.ZERO.compareTo(rateFromInvoice) == 0) {
+        if (columnGText != null && BigDecimal.ZERO.compareTo(columnGText) != 0) {
+            rateFromInvoice = columnGText;
         } else {
-            // invoicedRate == correctRate, recalculate cost to ensure consistency
-            cost = new BigDecimal(hours * correctRate.doubleValue());
+            if (columnBText != null && columnHText != null && !columnBText.isEmpty()
+                    && !columnCText.isEmpty() && columnHText.compareTo(BigDecimal.ZERO) != 0) {
+                rateFromInvoice = new BigDecimal("1");
+            }
         }
-
-        // Store for debugging
-        processedData.add(new ProcessedDataEntry(groupId, rateFromInvoice, correctRate, 
-                                                  hours, invoicedRate, cost));
-
-        return new RowData(groupId, hours, cost.doubleValue());
     }
 
+    String groupId = referenceData.getGroupByApproximateRate(rateFromInvoice);
+    BigDecimal correctRate = referenceData.getCorrectRateByApproximate(rateFromInvoice);
+
+    // ── DEBUG ──────────────────────────────────────────────────────────────
+    System.out.printf("ROW %d | B=%s | C=%s | D=%.2f | G=%s | H=%s%n",
+            row.getRowNum(), columnBText, columnCText, columnDText,
+            columnGText, columnHText);
+    System.out.printf("       rateFromInvoice=%s | groupId=%s | correctRate=%s%n",
+            rateFromInvoice, groupId, correctRate);
+    // ───────────────────────────────────────────────────────────────────────
+
+    if (groupId == null || correctRate == null) {
+        System.out.println("       >>> SKIPPED — no matching group for rate: " + rateFromInvoice);
+        return null;
+    }
+
+    double hours = getDoubleCellValue(row.getCell(3));
+    BigDecimal invoicedRate = getBigDecimalFromCell(row.getCell(6));
+    BigDecimal cost = getBigDecimalFromCell(row.getCell(7));
+
+    if (invoicedRate == null) invoicedRate = BigDecimal.ZERO;
+    if (cost == null) cost = BigDecimal.ZERO;
+
+    if (hours == 0 && correctRate.doubleValue() == 1) hours = correctRate.doubleValue();
+
+    System.out.printf("       hours=%.2f | invoicedRate=%s | cost=%s%n",
+            hours, invoicedRate, cost);
+
+    // ── ALSO FIX: BigDecimal == comparison is wrong, use .compareTo() ──
+    if (Math.abs(invoicedRate.doubleValue() - correctRate.doubleValue()) > 0.01) {
+        if (invoicedRate.compareTo(BigDecimal.ZERO) == 0 && cost.compareTo(BigDecimal.ZERO) != 0) {
+            hours = cost.doubleValue();
+            invoicedRate = BigDecimal.ONE;
+            cost = new BigDecimal(hours);
+            System.out.println("       >>> CASE A applied");
+        } else if (invoicedRate.compareTo(new BigDecimal("25")) == 0
+                || invoicedRate.compareTo(new BigDecimal("50")) == 0) {
+            // FIX: was using == on BigDecimal objects which always fails
+            correctRate = invoicedRate;
+            groupId = invoicedRate.compareTo(new BigDecimal("25")) == 0 ? "Guardas_25" : "Guardas_50";
+            cost = new BigDecimal(hours * correctRate.doubleValue());
+            System.out.println("       >>> CASE C applied (Guardas)");
+        } else {
+            hours = hours * invoicedRate.doubleValue() / correctRate.doubleValue();
+            invoicedRate = correctRate;
+            cost = new BigDecimal(hours * invoicedRate.doubleValue());
+            System.out.println("       >>> CASE B applied");
+        }
+    } else {
+        cost = new BigDecimal(hours * correctRate.doubleValue());
+        System.out.println("       >>> rates match, cost recalculated");
+    }
+
+    System.out.printf("       FINAL hours=%.2f | cost=%.2f | groupId=%s%n%n",
+            hours, cost.doubleValue(), groupId);
+
+    processedData.add(new ProcessedDataEntry(groupId, rateFromInvoice, correctRate,
+            hours, invoicedRate, cost));
+
+    return new RowData(groupId, hours, cost.doubleValue());
+}
     /**
      * Extracts the EUR rate from text like:
      * "Horas servicio: Tarifa 195,00 MAD/18,08 EUR (Operative)" => 18.08

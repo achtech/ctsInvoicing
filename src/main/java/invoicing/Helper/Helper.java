@@ -271,22 +271,25 @@ public class Helper {
     }
 
     public static int numberOfDays(String sheetName) {
-        String monthName = sheetName.substring(ExcelFileNameGenerator.SHEET_SERVICE_HOURS_DETAILS.length()).trim();
-        try {
-            int year = java.time.LocalDate.now().getYear();
-            Locale locale = Locale.ENGLISH;
-            int month = java.time.Month.from(
-                    YearMonth.parse(
-                            year + "-" + monthName.substring(0, 1).toUpperCase() + monthName.substring(1).toLowerCase(),
-                            java.time.format.DateTimeFormatter.ofPattern("yyyy-MMMM")
-                    ).atDay(1)
-            ).getValue();
-            return YearMonth.of(year, month).lengthOfMonth();
-        } catch (Exception e) {
-            System.err.println("Invalid month name: " + monthName);
-            return -1; // Or throw an exception
+    String monthName = sheetName.substring(ExcelFileNameGenerator.SHEET_SERVICE_HOURS_DETAILS.length()).trim();
+    try {
+        int year = java.time.LocalDate.now().getYear();
+        // Try English first, then Spanish
+        for (Locale locale : new Locale[]{Locale.ENGLISH, Locale.forLanguageTag("es-ES")}) {
+            try {
+                YearMonth ym = YearMonth.parse(
+                    year + "-" + monthName.substring(0, 1).toUpperCase() + monthName.substring(1).toLowerCase(),
+                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MMMM", locale)
+                );
+                return ym.lengthOfMonth();
+            } catch (Exception ignored) {}
         }
+        throw new Exception("No locale matched");
+    } catch (Exception e) {
+        System.err.println("Invalid month name: " + monthName);
+        return -1;
     }
+}
 
     public static Double getRates(String input) {
         String[] parts = input.split(" > ");
@@ -315,11 +318,20 @@ public class Helper {
     }
 
     public static int getMonthFromSheetName(String invoicingSheetName) {
-        String monthName = invoicingSheetName.substring(22);
-        Month month = Month.valueOf(monthName.toUpperCase());
-        // Get the month number (1-12)
-        return month.getValue();
+    String monthName = invoicingSheetName.substring(22).trim();
+    // Try English
+    try {
+        return Month.valueOf(monthName.toUpperCase()).getValue();
+    } catch (IllegalArgumentException ignored) {}
+    // Try Spanish
+    for (Locale locale : new Locale[]{Locale.forLanguageTag("es-ES"), Locale.forLanguageTag("es")}) {
+        for (Month m : Month.values()) {
+            String spanish = m.getDisplayName(java.time.format.TextStyle.FULL, locale);
+            if (spanish.equalsIgnoreCase(monthName)) return m.getValue();
+        }
     }
+    throw new IllegalArgumentException("Cannot parse month from sheet name: " + invoicingSheetName);
+}
 
 
 }

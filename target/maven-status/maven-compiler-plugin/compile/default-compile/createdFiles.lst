@@ -35,6 +35,7 @@ invoicing\service\month\DateProvider.class
 invoicing\service\month\ExecuteService.class
 invoicing\service\month\ServiceTeamExtractor.class
 invoicing\service\month\ExcelWriter.class
+invoicing\view\PrefixManagerDialog.class
 invoicing\service\UnifiedExecutionService.class
 invoicing\service\ext\ExcelReader$ServiceTeamRaw.class
 invoicing\service\rate\InputRowProcessor$ProcessedDataEntry.class

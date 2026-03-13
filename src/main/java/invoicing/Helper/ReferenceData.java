@@ -24,19 +24,20 @@ public class ReferenceData {
     }
 
     public void load(InputStream is) throws IOException {
-        try (Workbook wb = new XSSFWorkbook(is)) {
-            Sheet sheet = wb.getSheetAt(0); // Reference Table: Column A = GroupId, Column B = Rate
-            for (Row row : sheet) {
-                if (row.getRowNum() == 0) continue; // Skip header
-                String groupId = getStringCellValue(row.getCell(0)); // Column A
-                BigDecimal rate = getBigDecimalFromCell(row.getCell(1));    // Column B
-                if (groupId != null && rate!=null && rate.compareTo(BigDecimal.ZERO) > 0) {
-                    groupToRate.put(groupId, rate);
-                    rateToGroup.put(rate, groupId);
-                }
+    try (Workbook wb = new XSSFWorkbook(is)) {
+        Sheet sheet = wb.getSheetAt(0);
+        for (Row row : sheet) {
+            if (row.getRowNum() == 0) continue;
+            String groupId = getStringCellValue(row.getCell(0));
+            BigDecimal rate = getBigDecimalFromCell(row.getCell(1));
+            if (groupId != null && rate != null && rate.compareTo(BigDecimal.ZERO) > 0) {
+                groupToRate.put(groupId, rate);
+                rateToGroup.put(rate, groupId);
+                System.out.printf("  LOADED: groupId=%s rate=%s%n", groupId, rate); // ADD THIS
             }
         }
     }
+}
 
     private static BigDecimal getBigDecimalFromCell(Cell cell) {
         if (cell == null || cell.getCellType() == CellType.BLANK) {
@@ -73,27 +74,25 @@ public class ReferenceData {
      * Returns null if no match is found.
      */
     public String getGroupByApproximateRate(BigDecimal rate) {
-        double tolerance = 0.5; // Allow small differences
-        double rateFromInvoice = rate.doubleValue();
-        // Try exact match first
-        if (rateToGroup.containsKey(rateFromInvoice)) {
-            return rateToGroup.get(rateFromInvoice);
+    double tolerance = 0.5;
+    double rateFromInvoice = rate.doubleValue();
+    
+    String bestMatch = null;
+    double smallestDiff = tolerance;
+    
+    for (Map.Entry<String, BigDecimal> entry : groupToRate.entrySet()) {
+        double diff = Math.abs(entry.getValue().doubleValue() - rateFromInvoice);
+        if (diff < smallestDiff) {
+            smallestDiff = diff;
+            bestMatch = entry.getKey();
         }
-        
-        // Find closest match within tolerance
-        String bestMatch = null;
-        double smallestDiff = tolerance;
-        
-        for (Map.Entry<String, BigDecimal> entry : groupToRate.entrySet()) {
-            double diff = Math.abs(entry.getValue().doubleValue() - rateFromInvoice);
-            if (diff < smallestDiff) {
-                smallestDiff = diff;
-                bestMatch = entry.getKey();
-            }
-        }
-        
-        return bestMatch;
     }
+    
+    // DEBUG
+    System.out.printf("  LOOKUP rate=%.4f → bestMatch=%s (diff=%.4f)%n", 
+                       rateFromInvoice, bestMatch, smallestDiff);
+    return bestMatch;
+}
     
     public BigDecimal getCorrectRateByApproximate(BigDecimal rate) {
         String groupId = getGroupByApproximateRate(rate);

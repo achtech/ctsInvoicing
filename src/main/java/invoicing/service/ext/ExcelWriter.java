@@ -51,43 +51,53 @@ public class ExcelWriter {
             Cell c14 = row.createCell(4);c14.setCellValue(st.getBuDescription());c14.setCellStyle(bodyStyle);
         }
 
-        double grandTotalRaw = items.stream()
-                .mapToDouble(item -> Double.parseDouble(item.getCost().isEmpty() ? "0" :item.getCost() ))
-                .sum();
-        double grandTotal = Helper.round(grandTotalRaw); // ROUNDED TO 2 DECIMALS
-
-        int grandTotalRow = items.size()+1;
-        Row footer = sheet.createRow(grandTotalRow);
+        int grandTotalRowIdx = items.size() + 1;
+        Row footer = sheet.createRow(grandTotalRowIdx);
         Cell c20 = footer.createCell(2);c20.setCellValue("Grand Total");c20.setCellStyle(headerStyle);
-        Cell c21 = footer.createCell(3);c21.setCellValue(grandTotal);c21.setCellStyle(currencyStyle);
+        Cell c21 = footer.createCell(3);
+        String grandTotalFormula = "SUM(D2:D" + (items.size() + 1) + ")";
+        c21.setCellFormula(grandTotalFormula);
+        c21.setCellStyle(currencyStyle);
 
-        int title2Row = grandTotalRow+3;
-        Row title2 = sheet.createRow(title2Row);
+        int title2RowIdx = grandTotalRowIdx + 3;
+        Row title2 = sheet.createRow(title2RowIdx);
         Cell c22 = title2.createCell(1);c22.setCellValue("Amount"); c22.setCellStyle(headerStyle);
         Cell c23 = title2.createCell(2);c23.setCellValue("OneErp details");c23.setCellStyle(headerStyle);
 
-        int cogsRow = title2Row+1;
-        Row cogs = sheet.createRow(cogsRow);
+        int cogsRowIdx = title2RowIdx + 1;
+        Row cogs = sheet.createRow(cogsRowIdx);
         Cell c24 = cogs.createCell(0);c24.setCellValue("COGS");c24.setCellStyle(bodyStyle);
-        Cell c25 = cogs.createCell(1);c25.setCellValue(grandTotal);c25.setCellStyle(currencyStyle);
+        Cell c25 = cogs.createCell(1);
+        String grandTotalCellAddress = "D" + (grandTotalRowIdx + 1);
+        c25.setCellFormula(grandTotalCellAddress);
+        c25.setCellStyle(currencyStyle);
         Cell c26 = cogs.createCell(2);c26.setCellValue("Split on EXTs");c26.setCellStyle(bodyStyle);
 
-        int gaRow = cogsRow+1;
-        Row ga = sheet.createRow(gaRow);
+        int gaRowIdx = cogsRowIdx + 1;
+        Row ga = sheet.createRow(gaRowIdx);
         Cell c27 = ga.createCell(0);c27.setCellValue("G&A (10% COGS)");c27.setCellStyle(bodyStyle);
-        Cell c28 = ga.createCell(1);c28.setCellValue(Helper.round(grandTotal*0.1));c28.setCellStyle(currencyStyle);
+        Cell c28 = ga.createCell(1);
+        String cogsCellAddress = "B" + (cogsRowIdx + 1);
+        c28.setCellFormula(cogsCellAddress + "*0.1");
+        c28.setCellStyle(currencyStyle);
         Cell c29 = ga.createCell(2);c29.setCellValue("INT Code1");c29.setCellStyle(bodyStyle);
 
-        int tpRow = gaRow+1;
-        Row tp = sheet.createRow(tpRow);
+        int tpRowIdx = gaRowIdx + 1;
+        Row tp = sheet.createRow(tpRowIdx);
         Cell c30 = tp.createCell(0);c30.setCellValue("TP (5% (COGS+G&A))");c30.setCellStyle(bodyStyle);
-        Cell c31 = tp.createCell(1);c31.setCellValue(Helper.round(grandTotal*0.055));c31.setCellStyle(currencyStyle);
+        Cell c31 = tp.createCell(1);
+        String gaCellAddress = "B" + (gaRowIdx + 1);
+        c31.setCellFormula("(" + cogsCellAddress + "+" + gaCellAddress + ")*0.05");
+        c31.setCellStyle(currencyStyle);
         Cell c32 = tp.createCell(2);c32.setCellValue("INT Code2");c32.setCellStyle(bodyStyle);
 
-        int totalRow = tpRow+1;
-        Row total = sheet.createRow(totalRow);
+        int totalRowIdx = tpRowIdx + 1;
+        Row total = sheet.createRow(totalRowIdx);
         Cell c33 = total.createCell(0);c33.setCellValue("Total Cost");c33.setCellStyle(bodyStyle);
-        Cell c34 = total.createCell(1);c34.setCellValue(Helper.round(grandTotal*1.155));c34.setCellStyle(currencyStyle);
+        Cell c34 = total.createCell(1);
+        String tpCellAddress = "B" + (tpRowIdx + 1);
+        c34.setCellFormula("SUM(" + cogsCellAddress + ":" + tpCellAddress + ")");
+        c34.setCellStyle(currencyStyle);
 
         for (int i = 0; i < 10; i++) {
             sheet.autoSizeColumn(i);

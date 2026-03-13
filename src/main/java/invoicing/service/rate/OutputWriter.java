@@ -78,11 +78,13 @@ public class OutputWriter {
                 Cell c12 = dataRow.createCell(5); c12.setCellValue(cost); c12.setCellStyle(currencyStyle);
             }
             
-            totalCost = Helper.round(totalCost);
             // Create total row
             Row totalRow = sheet.createRow(rowNum);
             Cell c13 = totalRow.createCell(4); c13.setCellValue("Total"); c13.setCellStyle(headerStyle);
-            Cell c14 = totalRow.createCell(5); c14.setCellValue(totalCost); c14.setCellStyle(currencyStyle);
+            Cell c14 = totalRow.createCell(5);
+            String totalFormula = "SUM(F2:F" + rowNum + ")";
+            c14.setCellFormula(totalFormula);
+            c14.setCellStyle(currencyStyle);
 
             // Set column widths
             for (int i = 0; i < 6; i++) {

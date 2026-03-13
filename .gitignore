@@ -1,19 +1,4 @@
-# target/
-# Ignore the `target` folder (build outputs)
-/target/
-# Still allow the released jar and explicitly ignore the original jar
-!/target/invoicingTool.jar
-/target/original-InvoicingTool.jar
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-/target/classes/
-/target/generated-sources/
-/target/generated-test-sources/
-/target/maven-archiver/
-/target/test-classes/
-/target/maven-status/
-
+target/
 
 ### IntelliJ IDEA ###
 .idea/modules.xml

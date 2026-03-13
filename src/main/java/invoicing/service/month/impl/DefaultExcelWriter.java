@@ -86,11 +86,19 @@ public class DefaultExcelWriter implements ExcelWriter {
             cell.setCellValue(j);
             cell.setCellStyle(dateStyle);
         }
-        Cell cell = outputHeaderRow.createCell(headers.length + nbrDaysInThisMonths);
+        int workingHoursCol = headers.length + nbrDaysInThisMonths;
+        int rateDupCol = workingHoursCol + 1;
+        int costCol = workingHoursCol + 2;
+
+        Cell cell = outputHeaderRow.createCell(workingHoursCol);
         cell.setCellValue("Working Hours");
         cell.setCellStyle(headerStyle);
 
-        Cell cellAmount = outputHeaderRow.createCell(headers.length + nbrDaysInThisMonths + 1);
+        Cell cellRate = outputHeaderRow.createCell(rateDupCol);
+        cellRate.setCellValue("Rate");
+        cellRate.setCellStyle(headerStyle);
+
+        Cell cellAmount = outputHeaderRow.createCell(costCol);
         cellAmount.setCellValue("Cost (Euro) ");
         cellAmount.setCellStyle(headerStyle);
 
@@ -137,6 +145,7 @@ public class DefaultExcelWriter implements ExcelWriter {
         Row row1 = outputSheet.getRow(1);
         lastColumn = row1 != null ? row1.getLastCellNum() - 1 : 1;
         String letterTotalHours = Helper.getColumnLetter(lastColumn);
+        String letterRateDup = Helper.getColumnLetter(lastColumn + 1);
 
         for (Row row : outputSheet) {
             if (row.getRowNum() != 0) {
@@ -144,16 +153,22 @@ public class DefaultExcelWriter implements ExcelWriter {
                 Cell rateCell = row.getCell(3);
                 Cell descCell = row.getCell(1);
                 if (rateCell != null && CellType.NUMERIC.equals(rateCell.getCellType()) && rateCell.getNumericCellValue() != 0) {
-                    String rowNumber = String.valueOf(row.getRowNum() + 1);
-                    String formula = "IF(D" + rowNumber + "=0,1,D" + rowNumber + ")" +
-                            "*IF(" + letterTotalHours + rowNumber + "=0,1," + letterTotalHours + rowNumber + ")";
-                    newCell.setCellFormula(formula);
+                    newCell.setCellValue(Helper.round(rateCell.getNumericCellValue()));
                 } else {
-                    if (descCell != null) {
-                        newCell.setCellValue(descCell.getStringCellValue());
-                    }
+                    newCell.setCellValue("");
                 }
                 newCell.setCellStyle(currencyStyle);
+
+                Cell costCell = row.createCell(lastColumn + 2);
+                if (rateCell != null && CellType.NUMERIC.equals(rateCell.getCellType()) && rateCell.getNumericCellValue() != 0) {
+                    String rowNumber = String.valueOf(row.getRowNum() + 1);
+                    String formula = "IF(" + letterRateDup + rowNumber + "=0,1," + letterRateDup + rowNumber + ")" +
+                            "*IF(" + letterTotalHours + rowNumber + "=0,1," + letterTotalHours + rowNumber + ")";
+                    costCell.setCellFormula(formula);
+                } else if (descCell != null) {
+                    costCell.setCellValue(descCell.getStringCellValue());
+                }
+                costCell.setCellStyle(currencyStyle);
             }
         }
 
@@ -191,11 +206,15 @@ public class DefaultExcelWriter implements ExcelWriter {
             }
 
             Cell cellAdj = outputRow.createCell(lastCol);
-            Cell cellCost = outputRow.createCell(lastCol + 1);
+            Cell cellRateDup = outputRow.createCell(lastCol + 1);
+            Cell cellCost = outputRow.createCell(lastCol + 2);
 
             BigDecimal workingHours = new BigDecimal(row.getCell(12).getNumericCellValue());
             cellAdj.setCellValue(workingHours.doubleValue());
             cellAdj.setCellStyle(centerStyle);
+
+            cellRateDup.setCellValue(Helper.round(hourlyRate.doubleValue()));
+            cellRateDup.setCellStyle(currencyStyle);
 
             if (workingHours.compareTo(BigDecimal.ZERO) == 0) {
                 cellCost.setCellValue(Helper.round(row.getCell(16).getNumericCellValue()));
@@ -228,8 +247,14 @@ public class DefaultExcelWriter implements ExcelWriter {
         cellTotalRate.setCellFormula(formulaRateSum);
         cellTotalRate.setCellStyle(footerCurrencyStyle);
 
-        String letterTotalCost = Helper.getColumnLetter(lastColumn + 1);
-        Cell cellTotalCost = lastRow.createCell(lastColumn + 1);
+        Cell cellTotalRateDup = lastRow.createCell(lastColumn + 1);
+        String letterTotalRateDup = Helper.getColumnLetter(lastColumn + 1);
+        String formulaRateDupSum = "SUM(" + letterTotalRateDup + "2:" + letterTotalRateDup + (outputRowIndex) + ")";
+        cellTotalRateDup.setCellFormula(formulaRateDupSum);
+        cellTotalRateDup.setCellStyle(footerCurrencyStyle);
+
+        String letterTotalCost = Helper.getColumnLetter(lastColumn + 2);
+        Cell cellTotalCost = lastRow.createCell(lastColumn + 2);
         String formulaCost = "SUM(" + letterTotalCost + "2:" + letterTotalCost + (outputRowIndex) + ")";
         cellTotalCost.setCellFormula(formulaCost);
         cellTotalCost.setCellStyle(footerCurrencyStyle);
@@ -385,9 +410,15 @@ public class DefaultExcelWriter implements ExcelWriter {
         consolidatedSheet.addMergedRegion(new CellRangeAddress(
                 totalRow.getRowNum(), totalRow.getRowNum(), 0, 2));
 
+        // Col 3 – SUM of rate
+        StringBuilder rateFormula = new StringBuilder("SUM(");
+        for (int i = 0; i < dataRowIndices.size(); i++) {
+            rateFormula.append("D").append(dataRowIndices.get(i) + 1); // 1-based
+            if (i < dataRowIndices.size() - 1) rateFormula.append(",");
+        }
+        rateFormula.append(")");
         Cell totalRateCell = totalRow.createCell(3);
-        String totalRowNumber = String.valueOf(totalRow.getRowNum() + 1);
-        totalRateCell.setCellFormula("IF(E" + totalRowNumber + "=0,\"\",F" + totalRowNumber + "/E" + totalRowNumber + ")");
+        totalRateCell.setCellFormula(rateFormula.toString());
         totalRateCell.setCellStyle(footerCurrencyStyle);
 
         // Col 4 – SUM of hours

@@ -163,9 +163,13 @@ public class ExecuteService {
                     for (Integer rowIdx : grandTotalHoursRows) {
                         hoursFormula.add("E" + (rowIdx - 1));
                     }
-                    String grandRowNumber = String.valueOf(currentRow + 1);
+                    // Sum of all team "Total" rates (column D = index 3)
+                    StringJoiner rateFormula = new StringJoiner("+");
+                    for (Integer rowIdx : grandTotalHoursRows) {
+                        rateFormula.add("D" + (rowIdx - 1));
+                    }
                     Cell grandRateCell = grandTotalRow.createCell(3);
-                    grandRateCell.setCellFormula("IF(E" + grandRowNumber + "=0,\"\",F" + grandRowNumber + "/E" + grandRowNumber + ")");
+                    grandRateCell.setCellFormula(rateFormula.toString());
                     grandRateCell.setCellStyle(footerCurrencyStyle);
                     Cell grandHoursCell = grandTotalRow.createCell(4);
                     grandHoursCell.setCellFormula(hoursFormula.toString());

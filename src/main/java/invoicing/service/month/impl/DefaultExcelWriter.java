@@ -153,7 +153,7 @@ public class DefaultExcelWriter implements ExcelWriter {
                 Cell rateCell = row.getCell(3);
                 Cell descCell = row.getCell(1);
                 if (rateCell != null && CellType.NUMERIC.equals(rateCell.getCellType()) && rateCell.getNumericCellValue() != 0) {
-                    newCell.setCellValue(Helper.round(rateCell.getNumericCellValue()));
+                    newCell.setCellValue(rateCell.getNumericCellValue());
                 } else {
                     newCell.setCellValue("");
                 }
@@ -191,7 +191,7 @@ public class DefaultExcelWriter implements ExcelWriter {
 
             Cell cellD = outputRow.createCell(3);
             BigDecimal hourlyRate = new BigDecimal(row.getCell(15).getNumericCellValue());
-            cellD.setCellValue(Helper.round(hourlyRate.doubleValue()));
+            cellD.setCellValue(hourlyRate.doubleValue());
             cellD.setCellStyle(currencyStyle);
 
             Cell cellE = outputRow.createCell(4);
@@ -213,7 +213,7 @@ public class DefaultExcelWriter implements ExcelWriter {
             cellAdj.setCellValue(workingHours.doubleValue());
             cellAdj.setCellStyle(centerStyle);
 
-            cellRateDup.setCellValue(Helper.round(hourlyRate.doubleValue()));
+            cellRateDup.setCellValue(hourlyRate.doubleValue());
             cellRateDup.setCellStyle(currencyStyle);
 
             if (workingHours.compareTo(BigDecimal.ZERO) == 0) {
@@ -334,7 +334,7 @@ public class DefaultExcelWriter implements ExcelWriter {
             double rate = srcRow.getCell(3) != null ? srcRow.getCell(3).getNumericCellValue() : 0;
             Cell rateCell = outRow.createCell(3);
             if (rate != 0) {
-                rateCell.setCellValue(Helper.round(rate));
+                rateCell.setCellValue(rate);
             } else {
                 rateCell.setCellValue("");
             }
@@ -381,7 +381,7 @@ public class DefaultExcelWriter implements ExcelWriter {
             BigDecimal hourlyRate = new BigDecimal(adjRow.getCell(15).getNumericCellValue());
             Cell adjRateCell = outRow.createCell(3);
             if (hourlyRate.compareTo(BigDecimal.ZERO) != 0) {
-                adjRateCell.setCellValue(Helper.round(hourlyRate.doubleValue()));
+                adjRateCell.setCellValue(hourlyRate.doubleValue());
             } else {
                 adjRateCell.setCellValue("");
             }
@@ -539,7 +539,7 @@ public class DefaultExcelWriter implements ExcelWriter {
 
                 if (!description.isEmpty()) {
                     BigDecimal exactRate = getExactValueFromSheet(inputWorkbook, sheetNameEs, description, 6);
-                    thirdCell.setCellValue(Helper.round(exactRate.doubleValue()));
+                    thirdCell.setCellValue(exactRate.doubleValue());
                 }
                 thirdCell.setCellStyle(currencyStyle);
             }

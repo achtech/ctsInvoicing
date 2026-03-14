@@ -63,10 +63,23 @@ public class ExecuteService {
             int currentMonth = dateProvider.getMonthValue(currentDate);
             String currentMonthSpanish = dateProvider.getMonthNameSpanish(currentDate);
 
-            Sheet facturacionSheet = excelReader.getSheet(inputWorkbook, "Facturación " + currentMonthSpanish);
+            // Collect all projects/service teams across the requested months.
+            // Some projects can start next month, so they may not appear in the current Facturación sheet.
+            java.util.Set<String> serviceTeamNamesSet = new java.util.LinkedHashSet<>();
+            for (int i = 0; i < monthsToProcess; i++) {
+                LocalDate dateForSheet = currentDate.plusMonths(i);
+                String monthNameSpa = dateProvider.getMonthNameSpanish(dateForSheet);
+                String facturacionName = SHEET_FACTURACIÓN + " " + monthNameSpa;
+                Sheet facturacionSheet = excelReader.getSheet(inputWorkbook, facturacionName);
+                if (facturacionSheet == null) {
+                    System.err.println("Warning: Sheet not found: " + facturacionName);
+                    continue;
+                }
+                List<String> fullServiceTeamNames = serviceTeamExtractor.extractFullServiceTeamNames(facturacionSheet, inputWorkbook);
+                serviceTeamNamesSet.addAll(serviceTeamExtractor.extractServiceTeamNames(fullServiceTeamNames));
+            }
 
-            List<String> fullServiceTeamNames = serviceTeamExtractor.extractFullServiceTeamNames(facturacionSheet, inputWorkbook);
-            List<String> serviceTeamNames = serviceTeamExtractor.extractServiceTeamNames(fullServiceTeamNames);
+            List<String> serviceTeamNames = new java.util.ArrayList<>(serviceTeamNamesSet);
 
             // 1. GENERATE SEPARATE FILES
             for (String serviceTeam : serviceTeamNames) {

@@ -3,6 +3,7 @@ package invoicing.service;
 import invoicing.entities.ServiceTeam;
 import invoicing.Helper.GroupAggregator;
 import invoicing.Helper.ReferenceData;
+import invoicing.service.global.GlobalService;
 import invoicing.service.ext.ExcelReader;
 import invoicing.service.ext.ServiceTeamParser;
 import invoicing.service.month.ExecuteService;
@@ -46,6 +47,7 @@ public class UnifiedExecutionService {
         runRateModule(now, rateFolder, inputs, listener);
         runExtModule(extFolder, inputs, listener);
         runMonthModule(monthFolder, inputs, months, useManual, listener);
+        runGlobalMonthConsolidation(monthFolder, now, listener);
 
         listener.setProgress(3, "Completed", "All modules finished successfully.");
         listener.log("\n=== EXECUTION COMPLETED ===");
@@ -160,6 +162,21 @@ public class UnifiedExecutionService {
             listener.log("  > Month processing finished.");
         } catch (Exception e) {
             listener.log("  ! Month Module Critical Error: " + e.getMessage());
+        }
+    }
+
+    private void runGlobalMonthConsolidation(File monthFolder, LocalDateTime now, Listener listener) {
+        listener.log("\n[Global] Consolidating Month Excel outputs...");
+        try {
+            GlobalService globalService = new GlobalService();
+            File out = globalService.generateGlobalMonthWorkbook(monthFolder, now);
+            if (out == null) {
+                listener.log("  - Global: No month Excel files found to consolidate.");
+            } else {
+                listener.log("  > Global consolidated report created: " + out.getAbsolutePath());
+            }
+        } catch (Exception e) {
+            listener.log("  ! Global Module Failed: " + e.getMessage());
         }
     }
 

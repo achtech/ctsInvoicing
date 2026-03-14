@@ -63,8 +63,6 @@ public class ExecuteService {
             int currentMonth = dateProvider.getMonthValue(currentDate);
             String currentMonthSpanish = dateProvider.getMonthNameSpanish(currentDate);
 
-            String outputDirectory = outputGeneratedExcelsFilePath + "/Version_" + dateProvider.getCurrentDateTime();
-
             Sheet facturacionSheet = excelReader.getSheet(inputWorkbook, "Facturación " + currentMonthSpanish);
 
             List<String> fullServiceTeamNames = serviceTeamExtractor.extractFullServiceTeamNames(facturacionSheet, inputWorkbook);
@@ -95,14 +93,10 @@ public class ExecuteService {
                         );
                     }
 
-                    String outputFileName = fileNameGenerator.generateOutputFileName(currentMonth, currentYear, serviceTeam, outputDirectory);
+                    String outputFileName = fileNameGenerator.generateOutputFileName(currentMonth, currentYear, serviceTeam, outputGeneratedExcelsFilePath);
                     Helper.writeWorkbook(outputWorkbook, outputFileName);
                 }
             }
-
-            // 2. GENERATE CONSOLIDATED FILE (one sheet, tables stacked under each other)
-            String consolidatedFileName = outputDirectory
-                    + "/Consolidated_Month_Forecast_" + currentMonthSpanish + ".xlsx";
 
             try (Workbook consolidatedWorkbook = new XSSFWorkbook()) {
 
@@ -113,34 +107,6 @@ public class ExecuteService {
                 List<Integer> grandTotalCostRows  = new ArrayList<>();
 
                 int currentRow = 0;
-
-                for (String serviceTeam : serviceTeamNames) {
-                    for (int i = 0; i < monthsToProcess; i++) {
-                        LocalDate dateForSheet = currentDate.plusMonths(i);
-                        String monthNameEng = dateProvider.getMonthNameEnglish(dateForSheet);
-                        String monthNameSpa = dateProvider.getMonthNameSpanish(dateForSheet);
-
-                        int nextFreeRow = excelWriter.copyServiceHoursToConsolidatedSheet(
-                                inputWorkbook,
-                                allTeamsSheet,
-                                currentRow,
-                                serviceTeam,
-                                SHEET_HORAS_SERVICIO + " " + monthNameSpa,
-                                SHEET_SERVICE_HOURS_DETAILS + " " + monthNameEng,
-                                SHEET_AJUSTES,
-                                SHEET_FACTURACIÓN + " " + monthNameSpa
-                                
-                        );
-
-                        // The Total row is 2 blank rows before nextFreeRow (0-based),
-                        // converted to 1-based Excel row: (nextFreeRow - 2) + 1 = nextFreeRow - 1
-                        int totalRowExcel1Based = nextFreeRow - 1;
-                        grandTotalHoursRows.add(totalRowExcel1Based);
-                        grandTotalCostRows.add(totalRowExcel1Based);
-
-                        currentRow = nextFreeRow;
-                    }
-                }
 
                 // ── Grand Total row ───────────────────────────────────────────
                 if (currentRow > 0) {
@@ -190,7 +156,6 @@ public class ExecuteService {
                     allTeamsSheet.autoSizeColumn(col);
                 }
 
-                Helper.writeWorkbook(consolidatedWorkbook, consolidatedFileName);
             }
 
         } catch (IOException e) {

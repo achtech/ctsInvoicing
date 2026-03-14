@@ -2,12 +2,6 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-/target/classes/
-/target/generated-sources/
-/target/generated-test-sources/
-/target/maven-archiver/
-/target/test-classes/
-/target/maven-status/
 
 
 ### IntelliJ IDEA ###

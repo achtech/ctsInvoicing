@@ -33,7 +33,6 @@ public class ReferenceData {
             if (groupId != null && rate != null && rate.compareTo(BigDecimal.ZERO) > 0) {
                 groupToRate.put(groupId, rate);
                 rateToGroup.put(rate, groupId);
-                System.out.printf("  LOADED: groupId=%s rate=%s%n", groupId, rate); // ADD THIS
             }
         }
     }
@@ -89,8 +88,6 @@ public class ReferenceData {
     }
     
     // DEBUG
-    System.out.printf("  LOOKUP rate=%.4f → bestMatch=%s (diff=%.4f)%n", 
-                       rateFromInvoice, bestMatch, smallestDiff);
     return bestMatch;
 }
     

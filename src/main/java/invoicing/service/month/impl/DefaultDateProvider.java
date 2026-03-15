@@ -22,7 +22,6 @@ public class DefaultDateProvider implements DateProvider {
 
     @Override
     public LocalDate getCurrentDate(String path) {
-        System.out.println(path);
         String fileName = path.substring(path.lastIndexOf("\\") + 1);
         String[] dates = fileName.split("-");
         int year = Integer.parseInt(dates[0]);

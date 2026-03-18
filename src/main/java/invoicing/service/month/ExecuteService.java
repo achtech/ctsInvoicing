@@ -51,6 +51,28 @@ public class ExecuteService {
         public List<List<String>> getRows() {
             return rows;
         }
+
+        public int getRowCount() {
+            return rows == null ? 0 : rows.size();
+        }
+
+        public int getColumnCount() {
+            if (rows == null) return 0;
+            int max = 0;
+            for (List<String> r : rows) {
+                if (r != null && r.size() > max) max = r.size();
+            }
+            return max;
+        }
+
+        @Override
+        public String toString() {
+            return "SheetTableData{" +
+                    "sheetName='" + sheetName + '\'' +
+                    ", rows=" + getRowCount() +
+                    ", cols=" + getColumnCount() +
+                    '}';
+        }
     }
 
     public static final class MonthWorkbookData {
@@ -68,6 +90,18 @@ public class ExecuteService {
 
         public List<SheetTableData> getSheets() {
             return sheets;
+        }
+
+        public int getSheetCount() {
+            return sheets == null ? 0 : sheets.size();
+        }
+
+        @Override
+        public String toString() {
+            return "MonthWorkbookData{" +
+                    "serviceTeam='" + serviceTeam + '\'' +
+                    ", sheets=" + getSheetCount() +
+                    '}';
         }
     }
 

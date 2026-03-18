@@ -3,7 +3,6 @@ package invoicing.service.ext;
 import java.io.*;
 import java.util.*;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 public class ExcelReader {
 
@@ -26,7 +25,7 @@ public class ExcelReader {
     public List<ServiceTeamRaw> extractRawServiceTeams(File file) throws Exception {
         List<ServiceTeamRaw> result = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(file);
-             Workbook wb = new XSSFWorkbook(fis)) {
+             Workbook wb = WorkbookFactory.create(fis)) {
             // Sheet sheet = wb.getSheetAt(0) 
             // Task: Find sheet containing "Facturación" and current month (in Spanish)
             Sheet sheet = findSheet(wb);

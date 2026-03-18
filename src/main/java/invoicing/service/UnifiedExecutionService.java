@@ -13,16 +13,133 @@ import invoicing.service.rate.OutputWriter;
 
 import java.io.File;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class UnifiedExecutionService {
 
     public interface Listener {
         void log(String message);
         void setProgress(int value, String barLabel, String detail);
+    }
+
+    public static final class RateRow {
+        private final String groupId;
+        private final BigDecimal rate;
+        private final double hours;
+        private final double cost;
+
+        public RateRow(String groupId, BigDecimal rate, double hours, double cost) {
+            this.groupId = groupId;
+            this.rate = rate;
+            this.hours = hours;
+            this.cost = cost;
+        }
+
+        public String getGroupId() {
+            return groupId;
+        }
+
+        public BigDecimal getRate() {
+            return rate;
+        }
+
+        public double getHours() {
+            return hours;
+        }
+
+        public double getCost() {
+            return cost;
+        }
+    }
+
+    public static final class ExtRow {
+        private final String projectName;
+        private final String extCode;
+        private final String projectDescription;
+        private final String buDescription;
+        private final double cost;
+
+        public ExtRow(String projectName, String extCode, String projectDescription, String buDescription, double cost) {
+            this.projectName = projectName;
+            this.extCode = extCode;
+            this.projectDescription = projectDescription;
+            this.buDescription = buDescription;
+            this.cost = cost;
+        }
+
+        public String getProjectName() {
+            return projectName;
+        }
+
+        public String getExtCode() {
+            return extCode;
+        }
+
+        public String getProjectDescription() {
+            return projectDescription;
+        }
+
+        public String getBuDescription() {
+            return buDescription;
+        }
+
+        public double getCost() {
+            return cost;
+        }
+    }
+
+    public static final class MonthInputData {
+        private final String inputFileName;
+        private final int monthsUsed;
+        private final List<ExecuteService.MonthWorkbookData> workbooks;
+
+        public MonthInputData(String inputFileName, int monthsUsed, List<ExecuteService.MonthWorkbookData> workbooks) {
+            this.inputFileName = inputFileName;
+            this.monthsUsed = monthsUsed;
+            this.workbooks = workbooks;
+        }
+
+        public String getInputFileName() {
+            return inputFileName;
+        }
+
+        public int getMonthsUsed() {
+            return monthsUsed;
+        }
+
+        public List<ExecuteService.MonthWorkbookData> getWorkbooks() {
+            return workbooks;
+        }
+    }
+
+    public static final class UnifiedDataResult {
+        private final List<RateRow> rateRows;
+        private final List<ExtRow> extRows;
+        private final List<MonthInputData> monthInputs;
+
+        public UnifiedDataResult(List<RateRow> rateRows, List<ExtRow> extRows, List<MonthInputData> monthInputs) {
+            this.rateRows = rateRows;
+            this.extRows = extRows;
+            this.monthInputs = monthInputs;
+        }
+
+        public List<RateRow> getRateRows() {
+            return rateRows;
+        }
+
+        public List<ExtRow> getExtRows() {
+            return extRows;
+        }
+
+        public List<MonthInputData> getMonthInputs() {
+            return monthInputs;
+        }
     }
 
     public File runUnified(File targetDir, List<File> inputs, int months, boolean useManual, Listener listener) {
@@ -53,6 +170,152 @@ public class UnifiedExecutionService {
         listener.log("\n=== EXECUTION COMPLETED ===");
 
         return mainOutputFolder;
+    }
+
+    public UnifiedDataResult runUnifiedData(List<File> inputs, int months, boolean useManual, Listener listener) {
+        listener.log("=== STARTING UNIFIED DATA MODE ===");
+        listener.log("Months mode   : " + (useManual ? "MANUAL (" + months + " months)" : "AUTO-DETECT from Facturacion sheets"));
+
+        listener.setProgress(0, "Step 1/3 — Rate", "Computing Rate data...");
+        List<RateRow> rateRows = computeRateData(inputs, listener);
+
+        listener.setProgress(1, "Step 2/3 — ExtCode", "Computing ExtCode data...");
+        List<ExtRow> extRows = computeExtData(inputs, listener);
+
+        listener.setProgress(2, "Step 3/3 — Month", "Computing Month data...");
+        List<MonthInputData> monthInputs = computeMonthData(inputs, months, useManual, listener);
+
+        listener.setProgress(3, "Completed", "Data extraction completed.");
+        listener.log("=== DATA MODE COMPLETED ===");
+
+        return new UnifiedDataResult(rateRows, extRows, monthInputs);
+    }
+
+    private List<RateRow> computeRateData(List<File> inputs, Listener listener) {
+        try {
+            ReferenceData referenceData = new ReferenceData();
+            try (InputStream dataStream = getClass().getClassLoader().getResourceAsStream("Data.xlsx")) {
+                if (dataStream == null) {
+                    listener.log("  ! Rate Error: Data.xlsx not found inside the JAR. Check build resources.");
+                    return Collections.emptyList();
+                }
+                referenceData.load(dataStream);
+            } catch (Exception e) {
+                listener.log("  ! Rate Error loading Data.xlsx: " + e.getMessage());
+                return Collections.emptyList();
+            }
+
+            GroupAggregator aggregator = new GroupAggregator();
+            InputRowProcessor rowProcessor = new InputRowProcessor(referenceData);
+            InputFilesReader filesReader = new InputFilesReader(rowProcessor, aggregator);
+
+            for (File f : inputs) {
+                try {
+                    filesReader.processFile(f.getAbsolutePath());
+                } catch (Exception e) {
+                    listener.log("  - Rate Warning: Failed to process " + f.getName());
+                }
+            }
+
+            Map<String, Map<String, Double>> hoursAgg = aggregator.getAggregates();
+            Map<String, Map<String, Double>> costAgg = aggregator.getCostAggregates();
+            if (hoursAgg.isEmpty()) return Collections.emptyList();
+
+            List<RateRow> out = new ArrayList<>();
+            for (Map.Entry<String, Map<String, Double>> groupEntry : hoursAgg.entrySet()) {
+                String groupId = groupEntry.getKey();
+                BigDecimal rate = referenceData.getRateByGroup(groupId);
+                if (rate == null) continue;
+
+                double hours = 0;
+                for (Double h : groupEntry.getValue().values()) {
+                    hours += h == null ? 0 : h;
+                }
+
+                double cost = 0;
+                Map<String, Double> usersCost = costAgg.get(groupId);
+                if (usersCost != null) {
+                    for (Double c : usersCost.values()) {
+                        cost += c == null ? 0 : c;
+                    }
+                }
+
+                out.add(new RateRow(groupId, rate, hours, cost));
+            }
+            return out;
+        } catch (Exception e) {
+            listener.log("  ! Rate Data Failed: " + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private List<ExtRow> computeExtData(List<File> inputs, Listener listener) {
+        try {
+            ExcelReader reader = new ExcelReader();
+            ServiceTeamParser parser = new ServiceTeamParser();
+
+            List<ExcelReader.ServiceTeamRaw> rawItems = new ArrayList<>();
+            for (File f : inputs) {
+                try {
+                    rawItems.addAll(reader.extractRawServiceTeams(f));
+                } catch (Exception e) {
+                    listener.log("  - ExtCode Warning: Failed to process " + f.getName());
+                }
+            }
+
+            if (rawItems.isEmpty()) return Collections.emptyList();
+
+            List<String> labels = new ArrayList<>();
+            for (ExcelReader.ServiceTeamRaw raw : rawItems) {
+                labels.add(raw.getLabel());
+            }
+
+            List<ServiceTeam> parsed = parser.parse(labels);
+            List<ExtRow> out = new ArrayList<>();
+
+            for (int i = 0; i < parsed.size(); i++) {
+                ServiceTeam st = parsed.get(i);
+                ExcelReader.ServiceTeamRaw raw = rawItems.get(i);
+                String rawCost = raw.getCost() == null ? "" : String.valueOf(raw.getCost());
+                st.setCost(rawCost);
+                st.setStyle(raw.getCost() == null ? null : raw.getStyle());
+
+                double cost = 0;
+                if (raw.getCost() != null) cost = raw.getCost();
+
+                out.add(new ExtRow(
+                        st.getProjectName(),
+                        st.getExtCode(),
+                        st.getProjectDescription(),
+                        st.getBuDescription(),
+                        cost
+                ));
+            }
+
+            return out;
+        } catch (Exception e) {
+            listener.log("  ! ExtCode Data Failed: " + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private List<MonthInputData> computeMonthData(List<File> inputs, int months, boolean useManual, Listener listener) {
+        List<MonthInputData> out = new ArrayList<>();
+        for (File f : inputs) {
+            try {
+                int currentMonths = months;
+                if (!useManual) {
+                    int detected = countMonthSheets(f, listener);
+                    currentMonths = detected > 0 ? detected : months;
+                }
+                List<ExecuteService.MonthWorkbookData> workbooks = ExecuteService.executeToData(f.getAbsolutePath(), currentMonths);
+                out.add(new MonthInputData(f.getName(), currentMonths, workbooks));
+            } catch (Exception e) {
+                listener.log("  - Month Data Warning: Failed to process " + f.getName() + ": " + e.getMessage());
+                out.add(new MonthInputData(f.getName(), 0, Collections.emptyList()));
+            }
+        }
+        return out;
     }
 
     private void runRateModule(LocalDateTime now, File rateFolder, List<File> inputs, Listener listener) {

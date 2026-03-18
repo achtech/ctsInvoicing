@@ -4,10 +4,10 @@ import java.io.FileInputStream;
 import java.io.IOException;
 
 import invoicing.Helper.GroupAggregator;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 public class InputFilesReader {
     private final InputRowProcessor rowProcessor;
@@ -19,7 +19,7 @@ public class InputFilesReader {
 
     public void processFile(String filePath) throws IOException {
         try (FileInputStream fis = new FileInputStream(filePath);
-             Workbook wb = new XSSFWorkbook(fis)) {
+             Workbook wb = WorkbookFactory.create(fis)) {
             Sheet sheet = findSheet(wb); 
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Skip header

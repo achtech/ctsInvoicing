@@ -1,5 +1,7 @@
 package invoicing.Helper;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,21 +24,78 @@ public class CogsHelper {
             return List.of();
         }
 
-        int inputWholePart = rate.intValue(); // whole number part
+        BigDecimal normalizedInput = rate.setScale(2, RoundingMode.HALF_UP);
+        List<String> selectedYearMatches = findExactMatchesByYear(normalizedInput, fiscalYear, records);
+        if (!selectedYearMatches.isEmpty()) {
+            return selectedYearMatches;
+        }
 
+        FiscalYear fallbackYear = fiscalYear == FiscalYear.FY25 ? FiscalYear.FY26 : FiscalYear.FY25;
+        List<String> fallbackYearMatches = findExactMatchesByYear(normalizedInput, fallbackYear, records);
+        if (!fallbackYearMatches.isEmpty()) {
+            return fallbackYearMatches;
+        }
+
+        // Last resort: nearest match on selected year with a safe cap to avoid very broad categories.
+        List<String> nearest = findNearestMatchesByYear(rate, fiscalYear, records, new BigDecimal("0.60"));
+        if (!nearest.isEmpty()) {
+            return nearest;
+        }
+
+        return findNearestMatchesByYear(rate, fallbackYear, records, new BigDecimal("0.60"));
+    }
+
+    private static List<String> findExactMatchesByYear(BigDecimal normalizedInput, FiscalYear year, List<CogsRecord> records) {
         return records.stream()
                 .filter(record -> {
-
-                    BigDecimal value = switch (fiscalYear) {
-                        case FY25 -> record.getFy25();
-                        case FY26 -> record.getFy26();
-                    };
-
-                    return value != null &&
-                            value.intValue() == inputWholePart;
+                    BigDecimal value = getRateByYear(record, year);
+                    if (value == null) {
+                        return false;
+                    }
+                    BigDecimal normalizedValue = value.setScale(2, RoundingMode.HALF_UP);
+                    return normalizedValue.compareTo(normalizedInput) == 0;
                 })
                 .map(CogsRecord::getGroupId)
+                .distinct()
                 .collect(Collectors.toList());
+    }
+
+    private static List<String> findNearestMatchesByYear(
+            BigDecimal inputRate,
+            FiscalYear year,
+            List<CogsRecord> records,
+            BigDecimal maxAllowedDistance) {
+        BigDecimal minDistance = null;
+        List<String> nearestGroups = new ArrayList<>();
+
+        for (CogsRecord record : records) {
+            BigDecimal value = getRateByYear(record, year);
+            if (value == null) {
+                continue;
+            }
+
+            BigDecimal distance = value.subtract(inputRate).abs();
+            if (distance.compareTo(maxAllowedDistance) > 0) {
+                continue;
+            }
+
+            if (minDistance == null || distance.compareTo(minDistance) < 0) {
+                minDistance = distance;
+                nearestGroups.clear();
+                nearestGroups.add(record.getGroupId());
+            } else if (distance.compareTo(minDistance) == 0) {
+                nearestGroups.add(record.getGroupId());
+            }
+        }
+
+        return nearestGroups.stream().distinct().collect(Collectors.toList());
+    }
+
+    private static BigDecimal getRateByYear(CogsRecord record, FiscalYear year) {
+        return switch (year) {
+            case FY25 -> record.getFy25();
+            case FY26 -> record.getFy26();
+        };
     }
 
     public static List<CogsRecord> loadFromResources() throws Exception {

@@ -15,18 +15,9 @@ public class ServiceTeamExtractorImpl implements ServiceTeamExtractor {
         for (Row row : sheet) {
             Cell cell = row.getCell(1); // Column B
             if (cell != null && cell.getCellType() == CellType.STRING) {
-                CellStyle style = cell.getCellStyle();
-                if (style != null) {
-                    Font font = workbook.getFontAt(style.getFontIndexAsInt());
-                    if (font instanceof XSSFFont xssfFont) {
-                        XSSFColor color = xssfFont.getXSSFColor();
-                        if (color != null && color.getRGB() != null) {
-                            byte[] rgb = color.getRGB();
-                            if (rgb[0] == (byte) 255 && rgb[1] == (byte) 255 && rgb[2] == (byte) 255) {
-                                fullServiceTeamsName.add(cell.getStringCellValue());
-                            }
-                        }
-                    }
+                String value = cell.getStringCellValue();
+                if (value != null && !value.isEmpty() && value.contains(">")) {
+                    fullServiceTeamsName.add(value);
                 }
             }
         }

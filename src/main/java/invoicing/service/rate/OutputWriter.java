@@ -40,6 +40,7 @@ public class OutputWriter {
 
             int rowNum = 1;
             double totalCost = 0;
+            double totalHours = 0;
             
             for (Map.Entry<String, Map<String, Double>> groupEntry : aggregator.getAggregates().entrySet()) {
                 String groupId = groupEntry.getKey();
@@ -82,6 +83,7 @@ public class OutputWriter {
                 cost = Helper.round(cost);
                 
                 totalCost += cost;
+                totalHours += hours;
 
                 // Create data row
                 Row dataRow = sheet.createRow(rowNum++);
@@ -94,10 +96,12 @@ public class OutputWriter {
             }
             
             totalCost = Helper.round(totalCost);
+            totalHours = Helper.round(totalHours);
             // Create total row
             Row totalRow = sheet.createRow(rowNum);
-            Cell c13 = totalRow.createCell(4); c13.setCellValue("Total"); c13.setCellStyle(headerStyle);
-            Cell c14 = totalRow.createCell(5); c14.setCellValue(totalCost); c14.setCellStyle(currencyStyle);
+            Cell c13 = totalRow.createCell(3); c13.setCellValue("Total"); c13.setCellStyle(headerStyle);
+            Cell c14 = totalRow.createCell(4); c14.setCellValue(totalHours); c14.setCellStyle(currencyStyle);
+            Cell c15 = totalRow.createCell(5); c15.setCellValue(totalCost); c15.setCellStyle(currencyStyle);
 
             // Set column widths
             for (int i = 0; i < 6; i++) {

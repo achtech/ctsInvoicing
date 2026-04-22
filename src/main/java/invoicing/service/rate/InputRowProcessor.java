@@ -132,9 +132,9 @@ public class InputRowProcessor {
         // Extract hours from column D
         double hours = getDoubleCellValue(row.getCell(3));
 
-        // For Tools/expenses (rate=0), hours should be 0 - expenses are cost only
+        // For Tools/expenses (rate=0), show cost in both Hours and Rate columns
         if ("Tools".equals(groupId)) {
-            hours = 0;
+            hours = cost.doubleValue();
         } else if (hours == 0 && cost.doubleValue() != 0 && referenceRate != null && referenceRate.doubleValue() != 0) {
             // Only for regular groups calculate hours from cost
             hours = cost.doubleValue() / referenceRate.doubleValue();

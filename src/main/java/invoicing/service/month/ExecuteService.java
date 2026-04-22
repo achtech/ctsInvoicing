@@ -63,7 +63,7 @@ public class ExecuteService {
             int currentMonth = dateProvider.getMonthValue(currentDate);
             String currentMonthSpanish = dateProvider.getMonthNameSpanish(currentDate);
 
-            String outputDirectory = outputGeneratedExcelsFilePath + "/Version_" + dateProvider.getCurrentDateTime();
+            String outputDirectory = outputGeneratedExcelsFilePath;
 
             Sheet facturacionSheet = excelReader.getSheet(inputWorkbook, "Facturación " + currentMonthSpanish);
 
@@ -101,8 +101,9 @@ public class ExecuteService {
             }
 
             // 2. GENERATE CONSOLIDATED FILE (one sheet, tables stacked under each other)
+            String inputFileName = new File(inputExcelFilePath).getName().replace(".xlsx", "");
             String consolidatedFileName = outputDirectory
-                    + "/Consolidated_Month_Forecast_" + currentMonthSpanish + ".xlsx";
+                    + "/Consolidated_Month_Forecast_" + currentMonthSpanish + "_" + inputFileName + ".xlsx";
 
             try (Workbook consolidatedWorkbook = new XSSFWorkbook()) {
 

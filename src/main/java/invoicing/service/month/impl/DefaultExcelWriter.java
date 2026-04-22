@@ -194,11 +194,22 @@ public class DefaultExcelWriter implements ExcelWriter {
             Cell cellCost = outputRow.createCell(lastCol + 1);
 
             BigDecimal workingHours = new BigDecimal(row.getCell(12).getNumericCellValue());
-            cellAdj.setCellValue(workingHours.doubleValue());
+            BigDecimal adjustmentCost = new BigDecimal(row.getCell(16).getNumericCellValue());
+            BigDecimal computedHours = workingHours;
+            if (workingHours.compareTo(BigDecimal.ZERO) == 0 && adjustmentCost.compareTo(BigDecimal.ZERO) != 0) {
+                // Align month-hours behavior with Rate module:
+                // - if rate exists, derive hours = cost / rate
+                // - if rate is zero, treat as Tools-like row and use hours = cost
+                computedHours = hourlyRate.compareTo(BigDecimal.ZERO) == 0
+                        ? adjustmentCost
+                        : adjustmentCost.divide(hourlyRate, 10, java.math.RoundingMode.HALF_UP);
+            }
+
+            cellAdj.setCellValue(Helper.round(computedHours.doubleValue()));
             cellAdj.setCellStyle(centerStyle);
 
             if (workingHours.compareTo(BigDecimal.ZERO) == 0) {
-                cellCost.setCellValue(Helper.round(row.getCell(16).getNumericCellValue()));
+                cellCost.setCellValue(Helper.round(adjustmentCost.doubleValue()));
             } else {
                 cellCost.setCellValue(Helper.round(workingHours.multiply(hourlyRate).doubleValue()));
             }
@@ -354,6 +365,13 @@ public class DefaultExcelWriter implements ExcelWriter {
 
             BigDecimal workingHours = new BigDecimal(adjRow.getCell(12).getNumericCellValue());
             BigDecimal hourlyRate = new BigDecimal(adjRow.getCell(15).getNumericCellValue());
+            BigDecimal adjustmentCost = new BigDecimal(adjRow.getCell(16).getNumericCellValue());
+            BigDecimal computedHours = workingHours;
+            if (workingHours.compareTo(BigDecimal.ZERO) == 0 && adjustmentCost.compareTo(BigDecimal.ZERO) != 0) {
+                computedHours = hourlyRate.compareTo(BigDecimal.ZERO) == 0
+                        ? adjustmentCost
+                        : adjustmentCost.divide(hourlyRate, 10, java.math.RoundingMode.HALF_UP);
+            }
             Cell adjRateCell = outRow.createCell(3);
             if (hourlyRate.compareTo(BigDecimal.ZERO) != 0) {
                 adjRateCell.setCellValue(Helper.round(hourlyRate.doubleValue()));
@@ -363,12 +381,12 @@ public class DefaultExcelWriter implements ExcelWriter {
             adjRateCell.setCellStyle(currencyStyle);
 
             Cell adjHoursCell = outRow.createCell(4);
-            adjHoursCell.setCellValue(workingHours.doubleValue());
+            adjHoursCell.setCellValue(Helper.round(computedHours.doubleValue()));
             adjHoursCell.setCellStyle(currencyStyle);
 
             Cell adjCostCell = outRow.createCell(5);
             if (workingHours.compareTo(BigDecimal.ZERO) == 0) {
-                adjCostCell.setCellValue(Helper.round(adjRow.getCell(16).getNumericCellValue()));
+                adjCostCell.setCellValue(Helper.round(adjustmentCost.doubleValue()));
             } else {
                 adjCostCell.setCellValue(Helper.round(workingHours.multiply(hourlyRate).doubleValue()));
             }

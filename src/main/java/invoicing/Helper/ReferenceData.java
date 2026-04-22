@@ -25,11 +25,11 @@ public class ReferenceData {
 
     public void load(InputStream is) throws IOException {
         try (Workbook wb = new XSSFWorkbook(is)) {
-            Sheet sheet = wb.getSheetAt(0); // Reference Table: Column A = GroupId, Column B = Rate
+            Sheet sheet = wb.getSheetAt(0); // Reference Table: Column A = GroupId, Column C = FY26 Rate
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Skip header
                 String groupId = getStringCellValue(row.getCell(0)); // Column A
-                BigDecimal rate = getBigDecimalFromCell(row.getCell(1));    // Column B
+                BigDecimal rate = getBigDecimalFromCell(row.getCell(2));    // Column C (FY26)
                 if (groupId != null && rate!=null && rate.compareTo(BigDecimal.ZERO) > 0) {
                     groupToRate.put(groupId, rate);
                     rateToGroup.put(rate, groupId);

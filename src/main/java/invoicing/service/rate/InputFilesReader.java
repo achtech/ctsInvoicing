@@ -4,9 +4,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 
 import invoicing.Helper.GroupAggregator;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 public class InputFilesReader {
@@ -20,10 +18,11 @@ public class InputFilesReader {
     public void processFile(String filePath) throws IOException {
         try (FileInputStream fis = new FileInputStream(filePath);
              Workbook wb = new XSSFWorkbook(fis)) {
-            Sheet sheet = findSheet(wb); 
+            Sheet sheet = findSheet(wb);
+            FormulaEvaluator evaluator = wb.getCreationHelper().createFormulaEvaluator();
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Skip header
-                InputRowProcessor.RowData result = rowProcessor.processRow(row);
+                InputRowProcessor.RowData result = rowProcessor.processRow(row, evaluator);
                 if (result != null) {
                     aggregator.add(result.getGroupId(), "user", result.getHours(), result.getCost());
                 }

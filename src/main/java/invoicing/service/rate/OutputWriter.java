@@ -45,7 +45,22 @@ public class OutputWriter {
                 String groupId = groupEntry.getKey();
                 BigDecimal rate = referenceData.getRateByGroup(groupId);
 
-                if (rate == null) {
+                // Handle "Other_" groups or unmapped groups - extract rate from groupId
+                if (rate == null && groupId.startsWith("Other_")) {
+                    String rateStr = groupId.replace("Other_", "").replace("_", ".");
+                    try {
+                        rate = new BigDecimal(rateStr);
+                    } catch (NumberFormatException e) {
+                        rate = BigDecimal.ZERO;
+                    }
+                }
+                
+                // Handle Tools group - rate is always 1.00
+                if (rate == null && "Tools".equals(groupId)) {
+                    rate = new BigDecimal("1.00");
+                }
+                
+                if (rate == null || rate.compareTo(BigDecimal.ZERO) == 0) {
                     System.err.println("Warning: No rate found for GroupId: " + groupId);
                     continue;
                 }

@@ -2,8 +2,10 @@ package invoicing.service.rate;
 
 // InputRowProcessor.java
 import invoicing.Helper.ReferenceData;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 
 import java.math.BigDecimal;
@@ -64,78 +66,92 @@ public class InputRowProcessor {
     }
 
     /**
-     * Processes one row from input file according to the new workflow.
-     * Returns RowData with GroupId, hours, and cost.
+     * Processes one row from input file - simplified version.
+     * Uses raw cost from column H and only uses rate for GroupId mapping.
      */
-    public RowData processRow(Row row) {
+    public RowData processRow(Row row, FormulaEvaluator evaluator) {
         if (row == null) return null;
 
-        // Step 3.1: Extract rate from column C (parse text)
-        String columnBText = getStringCellValue(row.getCell(1)); // Column C (index 2)
-        String columnCText = getStringCellValue(row.getCell(2)); // Column C (index 2)
-        double columnDText = getDoubleCellValue(row.getCell(3)); // Column C (index 2)
-        BigDecimal columnGText = getBigDecimalFromCell(row.getCell(6)); // Column C (index 2)
-        BigDecimal columnHText = getBigDecimalFromCell(row.getCell(7)); // Column C (index 2)
+        // Extract rate from column C text (for GroupId mapping)
+        String columnCText = getStringCellValue(row.getCell(2)); // Column C
+        BigDecimal columnG = getBigDecimalFromCell(row.getCell(6), evaluator); // Column G
 
-        BigDecimal rateFromInvoice = extractRateFromText(columnCText);
-        if(BigDecimal.ZERO.compareTo(rateFromInvoice) == 0){
-            if(columnGText!=null && BigDecimal.ZERO.compareTo(columnGText) != 0){
-                rateFromInvoice = columnGText;
-            }
-            else {
-                if(columnBText!=null && columnHText!=null && !columnBText.isEmpty() && !columnCText.isEmpty() && columnHText.compareTo(BigDecimal.ZERO) !=0 ){
-                    rateFromInvoice = new BigDecimal("1");
-                }
+        BigDecimal rate = extractRateFromText(columnCText);
+        
+        // Fallback to column G if no rate in text
+        if (rate == null || rate.compareTo(BigDecimal.ZERO) == 0) {
+            if (columnG != null && columnG.compareTo(BigDecimal.ZERO) != 0) {
+                rate = columnG;
             }
         }
 
-        // Step 3.2: Look up correct rate and GroupId from reference data
-        String groupId = referenceData.getGroupByApproximateRate(rateFromInvoice);
-        BigDecimal correctRate = referenceData.getCorrectRateByApproximate(rateFromInvoice);
-        if (groupId == null || correctRate == null) {
-            System.out.println("Warning: No matching GroupId found for rate: " + rateFromInvoice);
+        // Handle special rates (Guardias)
+        String groupId = null;
+        BigDecimal referenceRate = null;
+        
+        // Get cost from column H first
+        BigDecimal cost = getBigDecimalFromCell(row.getCell(7), evaluator);
+        if (cost == null) {
+            cost = BigDecimal.ZERO;
+        }
+        
+        if (rate != null && rate.compareTo(BigDecimal.ZERO) != 0) {
+            if (rate.doubleValue() == 25.0) {
+                groupId = "Guardias - 25";
+                referenceRate = new BigDecimal("25.00");
+            } else if (rate.doubleValue() == 50.0) {
+                groupId = "Guardias-50";
+                referenceRate = new BigDecimal("50.00");
+            } else {
+                // Look up GroupId from reference data
+                groupId = referenceData.getGroupByApproximateRate(rate);
+                if (groupId != null) {
+                    referenceRate = referenceData.getRateByGroup(groupId);
+                } else {
+                    // Rate not found in ReferenceData - create a placeholder group
+                    groupId = "Other_" + rate.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString().replace(".", "_");
+                    referenceRate = rate;
+                }
+            }
+} else if (cost.compareTo(BigDecimal.ZERO) != 0) {
+            // Check if this is a total/summary row - column B is empty
+            String colB = getStringCellValue(row.getCell(1)); // Column B - employee name or label
+            if (colB == null || colB.trim().isEmpty()) {
+                return null; // Skip summary/total rows
+            }
+            // Rate is 0 or null, but cost > 0 - these are Tools/Other costs (expenses)
+            groupId = "Tools";
+            referenceRate = BigDecimal.ONE;
+        }
+        
+        // If still no groupId, skip this row
+        if (groupId == null) {
             return null;
         }
 
-        // Step 3.3: Extract hours from column D
-        double hours = getDoubleCellValue(row.getCell(3)); // Column D (index 3)
+        // Extract hours from column D
+        double hours = getDoubleCellValue(row.getCell(3));
 
-        // Step 3.4: Extract invoicedRate from column G
-        BigDecimal invoicedRate = getBigDecimalFromCell(row.getCell(6)); // Column G (index 6)
-
-        // Step 3.5: Extract Cost from column H
-        BigDecimal cost = getBigDecimalFromCell(row.getCell(7)); // Column H (index 7)
-        if(hours == 0 && correctRate != null && correctRate.doubleValue() == 1){
-            hours =correctRate.doubleValue();
-        }
-        // Step 3.6: Apply correction logic
-        if (Math.abs(invoicedRate.doubleValue() - correctRate.doubleValue()) > 0.01) { // invoicedRate != correctRate
-            if (invoicedRate.compareTo(BigDecimal.ZERO) == 0.0 && cost.compareTo(BigDecimal.ZERO) != 0.0) {
-                // Case a: invoicedRate = 0 and Cost != 0
-                hours = cost.doubleValue();
-                invoicedRate = new BigDecimal(1.0);
-                cost = new BigDecimal(hours * invoicedRate.doubleValue()); // Recalculate cost
-            } else if (invoicedRate == new BigDecimal(25.0) || invoicedRate == new BigDecimal(50.0)) {
-                // Case c: Special Guardas cases
-                correctRate = invoicedRate;
-                groupId = invoicedRate == new BigDecimal(25.0) ? "Guardas_25" : "Guardas_50";
-                cost = new BigDecimal(hours * correctRate.doubleValue()); // Recalculate cost
-            } else {
-                // Case b: General case - adjust hours and use correct rate
-                hours = hours * invoicedRate.doubleValue() / correctRate.doubleValue();
-                invoicedRate = correctRate;
-                cost = new BigDecimal(hours * invoicedRate.doubleValue());
-            }
-        } else {
-            // invoicedRate == correctRate, recalculate cost to ensure consistency
-            cost = new BigDecimal(hours * correctRate.doubleValue());
+        // For Tools/expenses (rate=0), hours should be 0 - expenses are cost only
+        if ("Tools".equals(groupId)) {
+            hours = 0;
+        } else if (hours == 0 && cost.doubleValue() != 0 && referenceRate != null && referenceRate.doubleValue() != 0) {
+            // Only for regular groups calculate hours from cost
+            hours = cost.doubleValue() / referenceRate.doubleValue();
         }
 
         // Store for debugging
-        processedData.add(new ProcessedDataEntry(groupId, rateFromInvoice, correctRate, 
-                                                  hours, invoicedRate, cost));
+        processedData.add(new ProcessedDataEntry(groupId, rate, referenceRate, 
+                                                  hours, columnG, cost));
 
         return new RowData(groupId, hours, cost.doubleValue());
+    }
+
+    /**
+     * Process row without evaluator (for backward compatibility)
+     */
+    public RowData processRow(Row row) {
+        return processRow(row, null);
     }
 
     /**
@@ -190,29 +206,44 @@ public class InputRowProcessor {
         return 0.0;
     }
 
-    private static BigDecimal getBigDecimalFromCell(Cell cell) {
-        if (cell == null || cell.getCellType() == CellType.BLANK) {
+    private static BigDecimal getBigDecimalFromCell(Cell cell, FormulaEvaluator evaluator) {
+        if (cell == null) {
             return null;
         }
 
-        // If the cell contains a formula, we evaluate the result type
-        CellType type = (cell.getCellType() == CellType.FORMULA)
-                ? cell.getCachedFormulaResultType()
-                : cell.getCellType();
+        CellType cellType = cell.getCellType();
+        
+        // If it's a formula, evaluate it
+        if (cellType == CellType.FORMULA && evaluator != null) {
+            CellValue evaluatedValue = evaluator.evaluate(cell);
+            if (evaluatedValue != null && evaluatedValue.getCellType() == CellType.NUMERIC) {
+                return new BigDecimal(String.valueOf(evaluatedValue.getNumberValue()));
+            }
+            return null;
+        }
 
-        if (type == CellType.NUMERIC) {
-            // Convert double to String first to maintain precision in BigDecimal
+        if (cellType == CellType.BLANK) {
+            return null;
+        }
+
+        if (cellType == CellType.NUMERIC) {
             return new BigDecimal(String.valueOf(cell.getNumericCellValue()));
-        } else if (type == CellType.STRING) {
+        } else if (cellType == CellType.STRING) {
             try {
-                return new BigDecimal(cell.getStringCellValue().trim());
+                String str = cell.getStringCellValue().trim();
+                str = str.replace("EUR", "").replace("MAD", "").trim();
+                str = str.replace(",", ".");
+                return new BigDecimal(str);
             } catch (NumberFormatException e) {
-                // Handle cases where the string isn't a valid number
                 return null;
             }
         }
 
         return null;
+    }
+
+    private static BigDecimal getBigDecimalFromCell(Cell cell) {
+        return getBigDecimalFromCell(cell, null);
     }
     private static boolean isNotBlank(String str) {
         return str != null && !str.trim().isEmpty();

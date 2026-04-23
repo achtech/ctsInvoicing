@@ -58,10 +58,12 @@ public class ExecuteService {
     private static class MonthSpec {
         private final String monthNameEng;
         private final String monthNameSpa;
+        private final String ajustesSheetName;
 
-        private MonthSpec(String monthNameEng, String monthNameSpa) {
+        private MonthSpec(String monthNameEng, String monthNameSpa, String ajustesSheetName) {
             this.monthNameEng = monthNameEng;
             this.monthNameSpa = monthNameSpa;
+            this.ajustesSheetName = ajustesSheetName;
         }
     }
 
@@ -124,7 +126,7 @@ public class ExecuteService {
             List<MonthSpec> availableMonths = new ArrayList<>();
             for (int i = 0; i < monthsToUse; i++) {
                 String monthSpa = workbookMonthList.get(i);
-                availableMonths.add(new MonthSpec(toEnglishMonthName(monthSpa), monthSpa));
+                availableMonths.add(new MonthSpec(toEnglishMonthName(monthSpa), monthSpa, SHEET_AJUSTES));
             }
 
             if (availableMonths.isEmpty()) {
@@ -162,25 +164,34 @@ public class ExecuteService {
                                 serviceTeam,
                                 SHEET_HORAS_SERVICIO + " " + month.monthNameSpa,
                                 SHEET_SERVICE_HOURS_DETAILS + " " + month.monthNameEng,
-                                SHEET_AJUSTES,
+                                month.ajustesSheetName,
                                 SHEET_FACTURACION + " " + month.monthNameSpa
                         );
                     }
 
-                    String outputFileName = fileNameGenerator.generateOutputFileName(currentMonth, currentYear, serviceTeam, outputDirectory);
+                    List<String> spanishMonths = availableMonths.stream()
+                            .map(m -> m.monthNameSpa)
+                            .collect(java.util.stream.Collectors.toList());
+                    String outputFileName = fileNameGenerator.generateOutputFileName(spanishMonths, serviceTeam, outputDirectory);
                     Helper.writeWorkbook(outputWorkbook, outputFileName);
                 }
             }
 
             String inputFileName = new File(inputExcelFilePath).getName().replace(".xlsx", "");
+            // Create month suffix from all available months
+            String monthSuffix = availableMonths.stream()
+                    .map(m -> m.monthNameSpa)
+                    .collect(java.util.stream.Collectors.joining("_"));
             String consolidatedFileName = outputDirectory
-                    + "/Consolidated_Month_Forecast_" + currentMonthSpanish + "_" + inputFileName + ".xlsx";
+                    + "/Consolidated_Month_Forecast_" + monthSuffix + "_" + inputFileName + ".xlsx";
 
             try (Workbook consolidatedWorkbook = new XSSFWorkbook()) {
                 Map<String, Sheet> monthSheets = new LinkedHashMap<>();
                 Map<String, Integer> monthCurrentRows = new LinkedHashMap<>();
                 Map<String, List<Integer>> monthGrandTotalHoursRows = new LinkedHashMap<>();
                 Map<String, List<Integer>> monthGrandTotalCostRows = new LinkedHashMap<>();
+                Map<String, Integer> monthHoursColIndex = new LinkedHashMap<>();
+                Map<String, Integer> monthCostColIndex = new LinkedHashMap<>();
 
                 for (MonthSpec month : availableMonths) {
                     String sheetName = "All Teams Forecast " + month.monthNameEng;
@@ -189,6 +200,9 @@ public class ExecuteService {
                     monthCurrentRows.put(month.monthNameSpa, 0);
                     monthGrandTotalHoursRows.put(month.monthNameSpa, new ArrayList<>());
                     monthGrandTotalCostRows.put(month.monthNameSpa, new ArrayList<>());
+                    int days = Helper.numberOfDays(SHEET_SERVICE_HOURS_DETAILS + " " + month.monthNameEng);
+                    monthHoursColIndex.put(month.monthNameSpa, 4 + days);
+                    monthCostColIndex.put(month.monthNameSpa, 5 + days);
                 }
 
                 for (String serviceTeam : serviceTeamNames) {
@@ -203,13 +217,13 @@ public class ExecuteService {
                                 serviceTeam,
                                 SHEET_HORAS_SERVICIO + " " + month.monthNameSpa,
                                 SHEET_SERVICE_HOURS_DETAILS + " " + month.monthNameEng,
-                                SHEET_AJUSTES,
+                                month.ajustesSheetName,
                                 SHEET_FACTURACION + " " + month.monthNameSpa
                         );
 
-                        int totalRowExcel1Based = nextFreeRow - 1;
-                        monthGrandTotalHoursRows.get(month.monthNameSpa).add(totalRowExcel1Based);
-                        monthGrandTotalCostRows.get(month.monthNameSpa).add(totalRowExcel1Based);
+                        int totalRowIndex0Based = nextFreeRow - 3;
+                        monthGrandTotalHoursRows.get(month.monthNameSpa).add(totalRowIndex0Based);
+                        monthGrandTotalCostRows.get(month.monthNameSpa).add(totalRowIndex0Based);
                         monthCurrentRows.put(month.monthNameSpa, nextFreeRow);
                     }
                 }
@@ -226,6 +240,10 @@ public class ExecuteService {
 
                         CellStyle headerStyle = Helper.getHeaderStyle(consolidatedWorkbook);
                         CellStyle footerCurrencyStyle = Helper.getFooterCurrencyStyle(consolidatedWorkbook);
+                        int hoursCol = monthHoursColIndex.get(month.monthNameSpa);
+                        int costCol = monthCostColIndex.get(month.monthNameSpa);
+                        String hoursColLetter = Helper.getColumnLetter(hoursCol);
+                        String costColLetter = Helper.getColumnLetter(costCol);
 
                         Cell labelCell = grandTotalRow.createCell(0);
                         labelCell.setCellValue("GRAND TOTAL (ALL PROJECTS)");
@@ -234,29 +252,31 @@ public class ExecuteService {
 
                         StringJoiner hoursFormula = new StringJoiner("+");
                         for (Integer rowIdx : hoursRows) {
-                            hoursFormula.add("E" + (rowIdx - 1));
+                            hoursFormula.add(hoursColLetter + (rowIdx + 1));
                         }
 
                         String grandRowNumber = String.valueOf(currentRow + 1);
                         Cell grandRateCell = grandTotalRow.createCell(3);
-                        grandRateCell.setCellFormula("IF(E" + grandRowNumber + "=0,\"\",F" + grandRowNumber + "/E" + grandRowNumber + ")");
+                        grandRateCell.setCellFormula("IF(" + hoursColLetter + grandRowNumber + "=0,\"\","
+                                + costColLetter + grandRowNumber + "/" + hoursColLetter + grandRowNumber + ")");
                         grandRateCell.setCellStyle(footerCurrencyStyle);
 
-                        Cell grandHoursCell = grandTotalRow.createCell(4);
+                        Cell grandHoursCell = grandTotalRow.createCell(hoursCol);
                         grandHoursCell.setCellFormula(hoursFormula.toString());
                         grandHoursCell.setCellStyle(headerStyle);
 
                         StringJoiner costFormula = new StringJoiner("+");
                         for (Integer rowIdx : costRows) {
-                            costFormula.add("F" + (rowIdx - 1));
+                            costFormula.add(costColLetter + (rowIdx + 1));
                         }
 
-                        Cell grandCostCell = grandTotalRow.createCell(5);
+                        Cell grandCostCell = grandTotalRow.createCell(costCol);
                         grandCostCell.setCellFormula(costFormula.toString());
                         grandCostCell.setCellStyle(footerCurrencyStyle);
                     }
 
-                    for (int col = 0; col < 6; col++) {
+                    int lastCol = monthCostColIndex.get(month.monthNameSpa);
+                    for (int col = 0; col <= lastCol; col++) {
                         monthSheet.autoSizeColumn(col);
                     }
                 }

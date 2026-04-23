@@ -1,9 +1,21 @@
 package invoicing.service.ext;
 
-import java.io.*;
-import java.util.*;
-import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.CellValue;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 public class ExcelReader {
 
@@ -12,24 +24,38 @@ public class ExcelReader {
         private Double cost;
         private CellStyle style;
 
-        public ServiceTeamRaw(String label, Double cost,CellStyle style) {
+        public ServiceTeamRaw(String label, Double cost, CellStyle style) {
             this.label = label;
             this.cost = cost;
             this.style = style;
         }
 
-        public String getLabel() { return label; }
-        public Double getCost() { return cost; }
-        public  CellStyle getStyle() {return style;}
+        public String getLabel() {
+            return label;
+        }
+
+        public Double getCost() {
+            return cost;
+        }
+
+        public CellStyle getStyle() {
+            return style;
+        }
     }
 
     public List<ServiceTeamRaw> extractRawServiceTeams(File file) throws Exception {
+        return extractRawServiceTeams(file, null);
+    }
+
+    public List<ServiceTeamRaw> extractRawServiceTeams(File file, String monthSpanish) throws Exception {
         List<ServiceTeamRaw> result = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(file);
              Workbook wb = new XSSFWorkbook(fis)) {
-            // Sheet sheet = wb.getSheetAt(0) 
-            // Task: Find sheet containing "Facturación" and current month (in Spanish)
-            Sheet sheet = findSheet(wb);
+
+            Sheet sheet = findSheet(wb, monthSpanish, monthSpanish == null || monthSpanish.isBlank());
+            if (sheet == null) {
+                return result;
+            }
 
             FormulaEvaluator evaluator = wb.getCreationHelper().createFormulaEvaluator();
 
@@ -44,7 +70,7 @@ public class ExcelReader {
                 Cell b = row.getCell(1);
                 if (b != null && b.getCellStyle().getFillForegroundColorColor() != null) {
                     if (currentLabel != null) {
-                        result.add(new ServiceTeamRaw(currentLabel, lastCost,lastStyle));
+                        result.add(new ServiceTeamRaw(currentLabel, lastCost, lastStyle));
                     }
                     currentLabel = b.getStringCellValue().trim();
                     lastCost = null;
@@ -81,24 +107,48 @@ public class ExcelReader {
                 result.add(new ServiceTeamRaw(currentLabel, lastCost, lastStyle));
             }
         }
+
         result.removeIf(item -> item.getLabel() == null || item.getLabel().trim().isEmpty());
         return result;
     }
 
-    private Sheet findSheet(Workbook wb) {
-        String currentMonth = java.time.LocalDate.now().getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.forLanguageTag("es-ES"));
-        
-        Sheet match = null;
+    private Sheet findSheet(Workbook wb, String monthSpanish, boolean fallbackAnyFacturacion) {
+        String normalizedTargetMonth = normalize(monthSpanish);
+        Sheet firstFacturacion = null;
+
         for (int i = 0; i < wb.getNumberOfSheets(); i++) {
             Sheet s = wb.getSheetAt(i);
-            String name = s.getSheetName();
-            if (name.toLowerCase().contains("facturaci\u00F3n") && name.toLowerCase().contains(currentMonth.toLowerCase())) {
+            String normalizedName = normalize(s.getSheetName());
+            if (!normalizedName.contains("facturacion")) {
+                continue;
+            }
+
+            if (firstFacturacion == null) {
+                firstFacturacion = s;
+            }
+
+            if (normalizedTargetMonth != null && !normalizedTargetMonth.isBlank() && normalizedName.contains(normalizedTargetMonth)) {
                 return s;
             }
-            if (match == null && name.toLowerCase().contains("facturaci\u00F3n")) {
-                match = s;
-            }
         }
-        return match != null ? match : wb.getSheetAt(0);
+
+        if (normalizedTargetMonth != null && !normalizedTargetMonth.isBlank()) {
+            return null;
+        }
+
+        if (firstFacturacion != null) {
+            return firstFacturacion;
+        }
+
+        return fallbackAnyFacturacion ? wb.getSheetAt(0) : null;
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT);
     }
 }

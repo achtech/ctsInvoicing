@@ -15,11 +15,22 @@ import java.util.List;
 public class ExcelWriter {
 
     public void write(List<ServiceTeam> items, File targetFolder) throws Exception {
-
         Workbook workbook = new XSSFWorkbook();
         LocalDate today = LocalDate.now();
         String sheetName = today.format(DateTimeFormatter.ofPattern("MMMM yyyy"));
+        writeSheet(workbook, sheetName, items);
 
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.format.DateTimeFormatter monthFormatter = java.time.format.DateTimeFormatter.ofPattern("MMMM");
+        String currentMonthStr = now.format(monthFormatter);
+        File file = new File(targetFolder, "ForeCast IT "+currentMonthStr+".xlsx");
+        FileOutputStream fos = new FileOutputStream(file);
+        workbook.write(fos);
+        fos.close();
+        workbook.close();
+    }
+
+    public void writeSheet(Workbook workbook, String sheetName, List<ServiceTeam> items) {
         Sheet sheet = workbook.createSheet(sheetName);
         CellStyle bodyStyle = getBodyStyle(workbook);
         CellStyle headerStyle = getHeaderStyle(workbook);
@@ -92,17 +103,6 @@ public class ExcelWriter {
         for (int i = 0; i < 10; i++) {
             sheet.autoSizeColumn(i);
         }
-        // -----------------------------------------------------
-        // WRITE FILE
-        // -----------------------------------------------------
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        java.time.format.DateTimeFormatter monthFormatter = java.time.format.DateTimeFormatter.ofPattern("MMMM");
-        String currentMonthStr = now.format(monthFormatter);
-        File file = new File(targetFolder, "ForeCast IT "+currentMonthStr+".xlsx");
-        FileOutputStream fos = new FileOutputStream(file);
-        workbook.write(fos);
-        fos.close();
-        workbook.close();
     }
 
 

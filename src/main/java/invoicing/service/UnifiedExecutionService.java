@@ -26,12 +26,16 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.text.Normalizer;
+import java.time.Month;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public class UnifiedExecutionService {
     private static final int MERGED_FILE_SEPARATOR_ROWS = 3;
@@ -61,8 +65,8 @@ public class UnifiedExecutionService {
         listener.log("Output Folder : " + mainOutputFolder.getAbsolutePath());
         listener.log("Months mode   : " + (useManual ? "MANUAL (" + months + " months)" : "AUTO-DETECT from Facturacion sheets"));
 
-        runRateModule(now, rateFolder, inputs, listener);
-        runExtModule(extFolder, inputs, listener);
+        runRateModule(now, rateFolder, inputs, months, listener);
+        runExtModule(extFolder, inputs, months, listener);
         runMonthModule(monthFolder, inputs, months, useManual, listener);
 
         listener.setProgress(3, "Completed", "All modules finished successfully.");
@@ -71,42 +75,55 @@ public class UnifiedExecutionService {
         return mainOutputFolder;
     }
 
-    private void runRateModule(LocalDateTime now, File rateFolder, List<File> inputs, Listener listener) {
+    private void runRateModule(LocalDateTime now, File rateFolder, List<File> inputs, int months, Listener listener) {
         listener.setProgress(0, "Step 1/3 - Rate", "Running Forecast By Rate...");
         listener.log("\n[1/3] Running Forecast By Rate...");
         try {
-            ReferenceData referenceData = new ReferenceData();
-            try (InputStream dataStream = getClass().getClassLoader().getResourceAsStream("Data.xlsx")) {
-                if (dataStream == null) {
-                    listener.log("  ! Rate Error: Data.xlsx not found inside the JAR. Check build resources.");
-                    return;
-                }
-                referenceData.load(dataStream);
-            } catch (Exception e) {
-                listener.log("  ! Rate Error loading Data.xlsx: " + e.getMessage());
+            List<String> monthNamesSpa = detectRequestedMonthsSpanish(inputs, months, listener);
+            if (monthNamesSpa.isEmpty()) {
+                listener.log("  - Rate Warning: No requested Facturacion month sheets found.");
                 return;
             }
 
-            GroupAggregator aggregator = new GroupAggregator();
-            InputRowProcessor rowProcessor = new InputRowProcessor(referenceData);
-            InputFilesReader filesReader = new InputFilesReader(rowProcessor, aggregator);
+            try (Workbook outputWorkbook = new XSSFWorkbook()) {
+                for (String monthSpa : monthNamesSpa) {
+                    ReferenceData referenceData = new ReferenceData();
+                    try (InputStream dataStream = getClass().getClassLoader().getResourceAsStream("Data.xlsx")) {
+                        if (dataStream == null) {
+                            listener.log("  ! Rate Error: Data.xlsx not found inside the JAR. Check build resources.");
+                            return;
+                        }
+                        referenceData.load(dataStream);
+                    } catch (Exception e) {
+                        listener.log("  ! Rate Error loading Data.xlsx: " + e.getMessage());
+                        return;
+                    }
 
-            for (File f : inputs) {
-                try {
-                    filesReader.processFile(f.getAbsolutePath());
-                } catch (Exception e) {
-                    listener.log("  - Rate Warning: Failed to process " + f.getName());
+                    GroupAggregator aggregator = new GroupAggregator();
+                    InputRowProcessor rowProcessor = new InputRowProcessor(referenceData);
+                    InputFilesReader filesReader = new InputFilesReader(rowProcessor, aggregator);
+
+                    for (File f : inputs) {
+                        try {
+                            boolean found = filesReader.processFile(f.getAbsolutePath(), monthSpa);
+                            if (!found) {
+                                listener.log("  - Rate Info: Facturacion " + monthSpa + " not found in " + f.getName());
+                            }
+                        } catch (Exception e) {
+                            listener.log("  - Rate Warning: Failed to process " + f.getName() + " for " + monthSpa);
+                        }
+                    }
+
+                    OutputWriter writer = new OutputWriter(referenceData, aggregator);
+                    writer.writeSheet(outputWorkbook, toEnglishMonthName(monthSpa, now));
                 }
-            }
 
-            if (!aggregator.getAggregates().isEmpty()) {
-                OutputWriter writer = new OutputWriter(referenceData, aggregator);
                 String fullMonth = now.format(DateTimeFormatter.ofPattern("MMMM"));
                 String rateOut = new File(rateFolder, "Rate Forecast " + fullMonth + ".xlsx").getAbsolutePath();
-                writer.write(rateOut);
+                try (FileOutputStream fos = new FileOutputStream(rateOut)) {
+                    outputWorkbook.write(fos);
+                }
                 listener.log("  > Rate Report created: " + rateOut);
-            } else {
-                listener.log("  - Rate Warning: No valid data found for Rate module.");
             }
         } catch (Exception e) {
             listener.log("  ! Rate Module Failed: " + e.getMessage());
@@ -114,37 +131,55 @@ public class UnifiedExecutionService {
         }
     }
 
-    private void runExtModule(File extFolder, List<File> inputs, Listener listener) {
+    private void runExtModule(File extFolder, List<File> inputs, int months, Listener listener) {
         listener.setProgress(1, "Step 2/3 - ExtCode", "Running Forecast By ExtCode...");
         listener.log("\n[2/3] Running Forecast By ExtCode...");
         try {
+            List<String> monthNamesSpa = detectRequestedMonthsSpanish(inputs, months, listener);
+            if (monthNamesSpa.isEmpty()) {
+                listener.log("  - ExtCode Warning: No requested Facturacion month sheets found.");
+                return;
+            }
+
             ExcelReader reader = new ExcelReader();
             ServiceTeamParser parser = new ServiceTeamParser();
             invoicing.service.ext.ExcelWriter writer = new invoicing.service.ext.ExcelWriter();
 
-            List<ExcelReader.ServiceTeamRaw> rawItems = new ArrayList<>();
-            for (File f : inputs) {
-                try {
-                    rawItems.addAll(reader.extractRawServiceTeams(f));
-                } catch (Exception e) {
-                    listener.log("  - ExtCode Warning: Failed to process " + f.getName());
-                }
-            }
+            try (Workbook outputWorkbook = new XSSFWorkbook()) {
+                for (String monthSpa : monthNamesSpa) {
+                    List<ExcelReader.ServiceTeamRaw> rawItems = new ArrayList<>();
+                    for (File f : inputs) {
+                        try {
+                            List<ExcelReader.ServiceTeamRaw> monthRaw = reader.extractRawServiceTeams(f, monthSpa);
+                            if (monthRaw.isEmpty()) {
+                                listener.log("  - ExtCode Info: Facturacion " + monthSpa + " not found in " + f.getName());
+                            }
+                            rawItems.addAll(monthRaw);
+                        } catch (Exception e) {
+                            listener.log("  - ExtCode Warning: Failed to process " + f.getName() + " for " + monthSpa);
+                        }
+                    }
 
-            if (!rawItems.isEmpty()) {
-                List<String> labels = new ArrayList<>();
-                for (ExcelReader.ServiceTeamRaw raw : rawItems) {
-                    labels.add(raw.getLabel());
+                    List<String> labels = new ArrayList<>();
+                    for (ExcelReader.ServiceTeamRaw raw : rawItems) {
+                        labels.add(raw.getLabel());
+                    }
+                    List<ServiceTeam> parsed = parser.parse(labels);
+                    for (int i = 0; i < parsed.size(); i++) {
+                        parsed.get(i).setCost(rawItems.get(i).getCost() == null ? "" : String.valueOf(rawItems.get(i).getCost()));
+                        parsed.get(i).setStyle(rawItems.get(i).getCost() == null ? null : rawItems.get(i).getStyle());
+                    }
+                    writer.writeSheet(outputWorkbook, toEnglishMonthName(monthSpa, LocalDateTime.now()), parsed);
                 }
-                List<ServiceTeam> parsed = parser.parse(labels);
-                for (int i = 0; i < parsed.size(); i++) {
-                    parsed.get(i).setCost(rawItems.get(i).getCost() == null ? "" : String.valueOf(rawItems.get(i).getCost()));
-                    parsed.get(i).setStyle(rawItems.get(i).getCost() == null ? null : rawItems.get(i).getStyle());
+
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                java.time.format.DateTimeFormatter monthFormatter = java.time.format.DateTimeFormatter.ofPattern("MMMM");
+                String currentMonthStr = now.format(monthFormatter);
+                File file = new File(extFolder, "ForeCast IT " + currentMonthStr + ".xlsx");
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    outputWorkbook.write(fos);
                 }
-                writer.write(parsed, extFolder);
                 listener.log("  > ExtCode Report created in: " + extFolder.getAbsolutePath());
-            } else {
-                listener.log("  - ExtCode Warning: No valid data found.");
             }
         } catch (Exception e) {
             listener.log("  ! ExtCode Module Failed: " + e.getMessage());
@@ -159,17 +194,13 @@ public class UnifiedExecutionService {
             for (File f : inputs) {
                 try {
                     int currentMonths = months;
-                    if (!useManual) {
-                        int detected = countMonthSheets(f, listener);
-                        if (detected > 0) {
-                            currentMonths = detected;
-                            listener.log("  - Auto-detected months for " + f.getName() + ": " + currentMonths);
-                        } else {
-                            listener.log("  - Warning: No Facturacion sheets found in " + f.getName() + ". Using default: " + months);
-                        }
-                    }
                     listener.log("  - Processing " + f.getName() + " with " + currentMonths + " months...");
-                    ExecuteService.executeScript(f.getAbsolutePath(), monthFolder.getAbsolutePath(), currentMonths);
+                    ExecuteService.executeScript(
+                            f.getAbsolutePath(),
+                            monthFolder.getAbsolutePath(),
+                            currentMonths,
+                            listener::log
+                    );
                 } catch (Exception e) {
                     listener.log("  - Month Warning: Failed to process " + f.getName() + ": " + e.getMessage());
                 }
@@ -210,55 +241,63 @@ public class UnifiedExecutionService {
 
             for (File file : consolidatedFiles) {
                 try (Workbook sourceWorkbook = WorkbookFactory.create(file)) {
-                    Sheet sourceSheet = sourceWorkbook.getSheet("All Teams Forecast");
-                    if (sourceSheet == null) {
+                    List<Sheet> sourceSheets = new ArrayList<>();
+                    for (int s = 0; s < sourceWorkbook.getNumberOfSheets(); s++) {
+                        Sheet candidate = sourceWorkbook.getSheetAt(s);
+                        if (candidate.getSheetName().startsWith("All Teams Forecast")) {
+                            sourceSheets.add(candidate);
+                        }
+                    }
+                    if (sourceSheets.isEmpty()) {
                         if (sourceWorkbook.getNumberOfSheets() == 0) {
                             listener.log("  - Month Merge Warning: " + file.getName() + " has no sheets.");
                             continue;
                         }
-                        sourceSheet = sourceWorkbook.getSheetAt(0);
+                        sourceSheets.add(sourceWorkbook.getSheetAt(0));
                     }
 
-                    Row titleRow = mergedSheet.createRow(mergedRowIndex++);
-                    Cell projectTitleCell = titleRow.createCell(0);
-                    projectTitleCell.setCellValue("Project source: " + file.getName());
-                    projectTitleCell.setCellStyle(headerStyle);
-                    mergedSheet.addMergedRegion(new CellRangeAddress(
-                            titleRow.getRowNum(),
-                            titleRow.getRowNum(),
-                            0,
-                            5
-                    ));
-
                     FormulaEvaluator evaluator = sourceWorkbook.getCreationHelper().createFormulaEvaluator();
-                    for (int r = 0; r <= sourceSheet.getLastRowNum(); r++) {
-                        Row sourceRow = sourceSheet.getRow(r);
-                        if (sourceRow == null) {
-                            continue;
-                        }
+                    for (Sheet sourceSheet : sourceSheets) {
+                        Row titleRow = mergedSheet.createRow(mergedRowIndex++);
+                        Cell projectTitleCell = titleRow.createCell(0);
+                        projectTitleCell.setCellValue("Project source: " + file.getName() + " / " + sourceSheet.getSheetName());
+                        projectTitleCell.setCellStyle(headerStyle);
+                        mergedSheet.addMergedRegion(new CellRangeAddress(
+                                titleRow.getRowNum(),
+                                titleRow.getRowNum(),
+                                0,
+                                5
+                        ));
 
-                        if (isGrandTotalRow(sourceRow, evaluator)) {
-                            allProjectsHours += getNumericCellValue(sourceRow.getCell(4), evaluator);
-                            allProjectsCost += getNumericCellValue(sourceRow.getCell(5), evaluator);
-                            continue;
-                        }
-
-                        Row targetRow = mergedSheet.createRow(mergedRowIndex++);
-                        short lastCellNum = sourceRow.getLastCellNum();
-                        if (lastCellNum <= 0) {
-                            continue;
-                        }
-
-                        for (int c = 0; c < lastCellNum; c++) {
-                            Cell sourceCell = sourceRow.getCell(c);
-                            if (sourceCell == null) {
+                        for (int r = 0; r <= sourceSheet.getLastRowNum(); r++) {
+                            Row sourceRow = sourceSheet.getRow(r);
+                            if (sourceRow == null) {
                                 continue;
                             }
-                            Cell targetCell = targetRow.createCell(c);
-                            copyCellValue(sourceCell, targetCell, evaluator);
-                        }
 
-                        applyMergedRowStyle(targetRow, sourceRow, evaluator, headerStyle, footerCurrencyStyle, leftStyle, centerStyle, currencyStyle);
+                            if (isGrandTotalRow(sourceRow, evaluator)) {
+                                allProjectsHours += getNumericCellValue(sourceRow.getCell(4), evaluator);
+                                allProjectsCost += getNumericCellValue(sourceRow.getCell(5), evaluator);
+                                continue;
+                            }
+
+                            Row targetRow = mergedSheet.createRow(mergedRowIndex++);
+                            short lastCellNum = sourceRow.getLastCellNum();
+                            if (lastCellNum <= 0) {
+                                continue;
+                            }
+
+                            for (int c = 0; c < lastCellNum; c++) {
+                                Cell sourceCell = sourceRow.getCell(c);
+                                if (sourceCell == null) {
+                                    continue;
+                                }
+                                Cell targetCell = targetRow.createCell(c);
+                                copyCellValue(sourceCell, targetCell, evaluator);
+                            }
+
+                            applyMergedRowStyle(targetRow, sourceRow, evaluator, headerStyle, footerCurrencyStyle, leftStyle, centerStyle, currencyStyle);
+                        }
                     }
 
                     for (int i = 0; i < MERGED_FILE_SEPARATOR_ROWS; i++) {
@@ -468,5 +507,85 @@ public class UnifiedExecutionService {
             listener.log("  - Error counting sheets in " + f.getName() + ": " + e.getMessage());
         }
         return count;
+    }
+
+    private List<String> detectRequestedMonthsSpanish(List<File> inputs, int requestedMonths, Listener listener) {
+        Set<String> months = new LinkedHashSet<>();
+        for (File f : inputs) {
+            try (Workbook wb = WorkbookFactory.create(f)) {
+                for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                    String sheetName = wb.getSheetName(i);
+                    String normalized = normalize(sheetName);
+                    if (!normalized.startsWith("facturacion ")) {
+                        continue;
+                    }
+                    String month = normalized.substring("facturacion ".length()).trim();
+                    if (!month.isEmpty()) {
+                        months.add(month);
+                    }
+                }
+            } catch (Exception e) {
+                listener.log("  - Warning: Failed month detection in " + f.getName() + ": " + e.getMessage());
+            }
+            if (months.size() >= requestedMonths) {
+                break;
+            }
+        }
+
+        List<String> ordered = new ArrayList<>(months);
+        if (ordered.size() > requestedMonths) {
+            return ordered.subList(0, requestedMonths);
+        }
+        return ordered;
+    }
+
+    private String toEnglishMonthName(String monthSpanish, LocalDateTime now) {
+        int year = now.getYear();
+        int monthNum = monthNumber(monthSpanish);
+        if (monthNum < 1 || monthNum > 12) {
+            return monthSpanish;
+        }
+        return Month.of(monthNum).getDisplayName(java.time.format.TextStyle.FULL, Locale.US) + " " + year;
+    }
+
+    private int monthNumber(String monthSpanish) {
+        String m = normalize(monthSpanish);
+        switch (m) {
+            case "enero":
+                return 1;
+            case "febrero":
+                return 2;
+            case "marzo":
+                return 3;
+            case "abril":
+                return 4;
+            case "mayo":
+                return 5;
+            case "junio":
+                return 6;
+            case "julio":
+                return 7;
+            case "agosto":
+                return 8;
+            case "septiembre":
+                return 9;
+            case "octubre":
+                return 10;
+            case "noviembre":
+                return 11;
+            case "diciembre":
+                return 12;
+            default:
+                return -1;
+        }
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return "";
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT);
     }
 }

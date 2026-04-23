@@ -39,6 +39,12 @@ public class ServiceTeamParser {
     private String extractEXT(String s) {
         int idx = s.indexOf("EXT");
         if (idx != -1) return s.substring(idx).trim();
+        // Also check for INT codes
+        idx = s.indexOf("INT");
+        if (idx != -1) return s.substring(idx).trim();
+        // Also check for INS codes
+        idx = s.indexOf("INS");
+        if (idx != -1) return s.substring(idx).trim();
         return "Pending";
     }
 

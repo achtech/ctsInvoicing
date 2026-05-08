@@ -221,7 +221,7 @@ public class ExecuteService {
                                 SHEET_FACTURACION + " " + month.monthNameSpa
                         );
 
-                        int totalRowIndex0Based = nextFreeRow - 3;
+                        int totalRowIndex0Based = nextFreeRow - 2;
                         monthGrandTotalHoursRows.get(month.monthNameSpa).add(totalRowIndex0Based);
                         monthGrandTotalCostRows.get(month.monthNameSpa).add(totalRowIndex0Based);
                         monthCurrentRows.put(month.monthNameSpa, nextFreeRow);

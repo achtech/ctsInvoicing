@@ -296,6 +296,12 @@ public class DefaultExcelWriter implements ExcelWriter {
         int hoursCol = 4 + nbrDaysInThisMonth;
         int costCol = hoursCol + 1;
 
+        Row totalRow = consolidatedSheet.createRow(rowIdx++);
+        Cell totalLabelCell = totalRow.createCell(0);
+        totalLabelCell.setCellValue("Total " + serviceTeam);
+        totalLabelCell.setCellStyle(headerStyle);
+        consolidatedSheet.addMergedRegion(new CellRangeAddress(totalRow.getRowNum(), totalRow.getRowNum(), 0, hoursCol - 1));
+
         Row headerRow = consolidatedSheet.createRow(rowIdx++);
         String[] headers = {"Empl. N", "Person", "Category", "Rate"};
         for (int c = 0; c < headers.length; c++) {
@@ -462,22 +468,8 @@ public class DefaultExcelWriter implements ExcelWriter {
             adjCostCell.setCellStyle(currencyStyle);
         }
 
-        Row totalRow = consolidatedSheet.createRow(rowIdx);
-        rowIdx++;
-
-        Cell totalLabelCell = totalRow.createCell(0);
-        totalLabelCell.setCellValue("Total " + serviceTeam);
-        totalLabelCell.setCellStyle(headerStyle);
-        consolidatedSheet.addMergedRegion(new CellRangeAddress(totalRow.getRowNum(), totalRow.getRowNum(), 0, 2));
-
         String hoursColumnLetter = Helper.getColumnLetter(hoursCol);
         String costColumnLetter = Helper.getColumnLetter(costCol);
-
-        Cell totalRateCell = totalRow.createCell(3);
-        String totalRowNumber = String.valueOf(totalRow.getRowNum() + 1);
-        totalRateCell.setCellFormula("IF(" + hoursColumnLetter + totalRowNumber + "=0,\"\","
-                + costColumnLetter + totalRowNumber + "/" + hoursColumnLetter + totalRowNumber + ")");
-        totalRateCell.setCellStyle(footerCurrencyStyle);
 
         StringBuilder hoursFormula = new StringBuilder("SUM(");
         for (int i = 0; i < dataRowIndices.size(); i++) {
@@ -487,7 +479,8 @@ public class DefaultExcelWriter implements ExcelWriter {
             }
         }
         hoursFormula.append(")");
-        Cell totalHoursCell = totalRow.createCell(hoursCol);
+        Row bottomTotalRow = consolidatedSheet.createRow(rowIdx++);
+        Cell totalHoursCell = bottomTotalRow.createCell(hoursCol);
         totalHoursCell.setCellFormula(hoursFormula.toString());
         totalHoursCell.setCellStyle(headerStyle);
 
@@ -499,11 +492,10 @@ public class DefaultExcelWriter implements ExcelWriter {
             }
         }
         costFormula.append(")");
-        Cell totalCostCell = totalRow.createCell(costCol);
+        Cell totalCostCell = bottomTotalRow.createCell(costCol);
         totalCostCell.setCellFormula(costFormula.toString());
         totalCostCell.setCellStyle(footerCurrencyStyle);
 
-        consolidatedSheet.createRow(rowIdx++);
         consolidatedSheet.createRow(rowIdx++);
 
         return rowIdx;

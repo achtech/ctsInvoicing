@@ -245,21 +245,22 @@ public class ExecuteService {
                         String hoursColLetter = Helper.getColumnLetter(hoursCol);
                         String costColLetter = Helper.getColumnLetter(costCol);
 
-                        Cell labelCell = grandTotalRow.createCell(0);
+                        int grandLabelStartCol = 4;
+                        int grandLabelEndCol = Math.max(grandLabelStartCol, hoursCol - 1);
+                        Cell labelCell = grandTotalRow.createCell(grandLabelStartCol);
                         labelCell.setCellValue("GRAND TOTAL (ALL PROJECTS)");
                         labelCell.setCellStyle(headerStyle);
-                        monthSheet.addMergedRegion(new CellRangeAddress(currentRow, currentRow, 0, 2));
+                        monthSheet.addMergedRegion(new CellRangeAddress(
+                                currentRow,
+                                currentRow,
+                                grandLabelStartCol,
+                                grandLabelEndCol
+                        ));
 
                         StringJoiner hoursFormula = new StringJoiner("+");
                         for (Integer rowIdx : hoursRows) {
                             hoursFormula.add(hoursColLetter + (rowIdx + 1));
                         }
-
-                        String grandRowNumber = String.valueOf(currentRow + 1);
-                        Cell grandRateCell = grandTotalRow.createCell(3);
-                        grandRateCell.setCellFormula("IF(" + hoursColLetter + grandRowNumber + "=0,\"\","
-                                + costColLetter + grandRowNumber + "/" + hoursColLetter + grandRowNumber + ")");
-                        grandRateCell.setCellStyle(footerCurrencyStyle);
 
                         Cell grandHoursCell = grandTotalRow.createCell(hoursCol);
                         grandHoursCell.setCellFormula(hoursFormula.toString());

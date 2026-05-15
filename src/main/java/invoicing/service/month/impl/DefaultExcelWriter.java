@@ -245,11 +245,6 @@ public class DefaultExcelWriter implements ExcelWriter {
         cellTotalHours.setCellFormula(formulaHours);
         cellTotalHours.setCellStyle(headerStyle);
 
-        Cell cellTotalRate = lastRow.createCell(3);
-        String formulaRateSum = "SUM(D2:D" + (outputRowIndex) + ")";
-        cellTotalRate.setCellFormula(formulaRateSum);
-        cellTotalRate.setCellStyle(footerCurrencyStyle);
-
         String letterTotalCost = Helper.getColumnLetter(lastColumn + 1);
         Cell cellTotalCost = lastRow.createCell(lastColumn + 1);
         String formulaCost = "SUM(" + letterTotalCost + "2:" + letterTotalCost + (outputRowIndex) + ")";

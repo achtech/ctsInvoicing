@@ -395,23 +395,17 @@ public class UnifiedExecutionService {
                     mergedRowIndex++;
                     Row grandTotalRow = mergedSheet.createRow(mergedRowIndex);
 
-                    Cell labelCell = grandTotalRow.createCell(0);
+                    int grandLabelStartCol = 4;
+                    int grandLabelEndCol = Math.max(grandLabelStartCol, hoursCol - 1);
+                    Cell labelCell = grandTotalRow.createCell(grandLabelStartCol);
                     labelCell.setCellValue("GRAND TOTAL (ALL PROJECTS)");
                     labelCell.setCellStyle(headerStyle);
                     mergedSheet.addMergedRegion(new CellRangeAddress(
                             grandTotalRow.getRowNum(),
                             grandTotalRow.getRowNum(),
-                            0,
-                            2
+                            grandLabelStartCol,
+                            grandLabelEndCol
                     ));
-
-                    Cell rateCell = grandTotalRow.createCell(rateCol);
-                    if (allProjectsHours != 0) {
-                        rateCell.setCellValue(Helper.round(allProjectsCost / allProjectsHours));
-                    } else {
-                        rateCell.setCellValue("");
-                    }
-                    rateCell.setCellStyle(footerCurrencyStyle);
 
                     Cell hoursCell = grandTotalRow.createCell(hoursCol);
                     hoursCell.setCellValue(Helper.round(allProjectsHours));

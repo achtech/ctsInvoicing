@@ -4,6 +4,8 @@ package invoicing.service.rate;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import invoicing.Helper.Helper;
@@ -23,7 +25,7 @@ public class OutputWriter {
 
     public void write(String outputPath) throws IOException {
         try (Workbook wb = new XSSFWorkbook()) {
-            writeSheet(wb, "Consolidated");
+            writeSheet(wb, "Consolidated", null);
             
             try (FileOutputStream fos = new FileOutputStream(outputPath)) {
                 wb.write(fos);
@@ -32,6 +34,10 @@ public class OutputWriter {
     }
 
     public void writeSheet(Workbook wb, String sheetName) {
+        writeSheet(wb, sheetName, null);
+    }
+
+    public void writeSheet(Workbook wb, String sheetName, List<InputRowProcessor.RowData> processedRows) {
         CellStyle bodyStyle = getBodyStyle(wb);
         CellStyle headerStyle = getHeaderStyle(wb);
         CellStyle currencyStyle = getCurrencyStyle(wb);
@@ -50,52 +56,77 @@ public class OutputWriter {
         double totalCost = 0;
         double totalHours = 0;
 
-        for (Map.Entry<String, Map<String, Double>> groupEntry : aggregator.getAggregates().entrySet()) {
-            String groupId = groupEntry.getKey();
-            BigDecimal rate = referenceData.getRateByGroup(groupId);
-
-            if (rate == null && groupId.startsWith("Other_")) {
-                String rateStr = groupId.replace("Other_", "").replace("_", ".");
-                try {
-                    rate = new BigDecimal(rateStr);
-                } catch (NumberFormatException e) {
-                    rate = BigDecimal.ZERO;
+        if (processedRows != null && !processedRows.isEmpty()) {
+            Map<String, RateBucket> cogsBuckets = new LinkedHashMap<>();
+            for (InputRowProcessor.RowData row : processedRows) {
+                double rate = row.getBaseRate() != 0
+                        ? row.getBaseRate()
+                        : (row.getMappedRate() != 0 ? row.getMappedRate() : row.getSourceRate());
+                if (row.getAdjustmentType() != null
+                        && !"Extra hours".equals(row.getAdjustmentType())
+                        && row.getSourceRate() != 0) {
+                    rate = row.getSourceRate();
                 }
+                final double bucketRate = rate;
+                String key = row.getGroupId() + "||" + rate;
+                RateBucket bucket = cogsBuckets.computeIfAbsent(key, k -> new RateBucket(row.getGroupId(), bucketRate));
+                bucket.hours += row.getHours() * row.getQuantityMultiplier();
             }
 
-            if (rate == null && "Tools".equals(groupId)) {
-                rate = new BigDecimal("1.00");
+            for (RateBucket bucket : cogsBuckets.values()) {
+                double cost = Helper.round(bucket.hours * bucket.rate);
+                totalHours += bucket.hours;
+                totalCost += cost;
+
+                Row dataRow = sheet.createRow(rowNum++);
+                Cell c7 = dataRow.createCell(0); c7.setCellValue("Italy"); c7.setCellStyle(bodyStyle);
+                Cell c8 = dataRow.createCell(1); c8.setCellValue("INS-026696-00003"); c8.setCellStyle(bodyStyle);
+                Cell c9 = dataRow.createCell(2); c9.setCellValue(bucket.groupId); c9.setCellStyle(bodyStyle);
+                Cell c10 = dataRow.createCell(3); c10.setCellValue(bucket.rate); c10.setCellStyle(currencyStyle);
+                Cell c11 = dataRow.createCell(4); c11.setCellValue(bucket.hours); c11.setCellStyle(bodyStyle);
+                Cell c12 = dataRow.createCell(5); c12.setCellValue(cost); c12.setCellStyle(currencyStyle);
             }
 
-            if (rate == null || rate.compareTo(BigDecimal.ZERO) == 0) {
-                System.err.println("Warning: No rate found for GroupId: " + groupId);
-                continue;
-            }
+        } else {
+            for (Map.Entry<String, Map<String, Double>> groupEntry : aggregator.getAggregates().entrySet()) {
+                String groupId = groupEntry.getKey();
+                BigDecimal rate = referenceData.getRateByGroup(groupId);
 
-            double hours = 0;
-            for (Double h : groupEntry.getValue().values()) {
-                hours += h;
-            }
-
-            double cost = 0;
-            Map<String, Double> usersCost = aggregator.getCostAggregates().get(groupId);
-            if (usersCost != null) {
-                for (Double c : usersCost.values()) {
-                    cost += c;
+                if (rate == null && groupId.startsWith("Other_")) {
+                    String rateStr = groupId.replace("Other_", "").replace("_", ".");
+                    try {
+                        rate = new BigDecimal(rateStr);
+                    } catch (NumberFormatException e) {
+                        rate = BigDecimal.ZERO;
+                    }
                 }
+
+                if (rate == null && "Tools".equals(groupId)) {
+                    rate = new BigDecimal("1.00");
+                }
+
+                if (rate == null || rate.compareTo(BigDecimal.ZERO) == 0) {
+                    System.err.println("Warning: No rate found for GroupId: " + groupId);
+                    continue;
+                }
+
+                double hours = 0;
+                for (Double h : groupEntry.getValue().values()) {
+                    hours += h;
+                }
+
+                double cost = Helper.round(hours * rate.doubleValue());
+                totalCost += cost;
+                totalHours += hours;
+
+                Row dataRow = sheet.createRow(rowNum++);
+                Cell c7 = dataRow.createCell(0); c7.setCellValue("Italy"); c7.setCellStyle(bodyStyle);
+                Cell c8 = dataRow.createCell(1); c8.setCellValue("INS-026696-00003"); c8.setCellStyle(bodyStyle);
+                Cell c9 = dataRow.createCell(2); c9.setCellValue(groupId); c9.setCellStyle(bodyStyle);
+                Cell c10 = dataRow.createCell(3); c10.setCellValue(rate.doubleValue()); c10.setCellStyle(currencyStyle);
+                Cell c11 = dataRow.createCell(4); c11.setCellValue(hours); c11.setCellStyle(bodyStyle);
+                Cell c12 = dataRow.createCell(5); c12.setCellValue(cost); c12.setCellStyle(currencyStyle);
             }
-            cost = Helper.round(cost);
-
-            totalCost += cost;
-            totalHours += hours;
-
-            Row dataRow = sheet.createRow(rowNum++);
-            Cell c7 = dataRow.createCell(0); c7.setCellValue("Italy"); c7.setCellStyle(bodyStyle);
-            Cell c8 = dataRow.createCell(1); c8.setCellValue("INS-026696-00003"); c8.setCellStyle(bodyStyle);
-            Cell c9 = dataRow.createCell(2); c9.setCellValue(groupId); c9.setCellStyle(bodyStyle);
-            Cell c10 = dataRow.createCell(3); c10.setCellValue(rate.doubleValue()); c10.setCellStyle(currencyStyle);
-            Cell c11 = dataRow.createCell(4); c11.setCellValue(hours); c11.setCellStyle(bodyStyle);
-            Cell c12 = dataRow.createCell(5); c12.setCellValue(cost); c12.setCellStyle(currencyStyle);
         }
 
         totalCost = Helper.round(totalCost);
@@ -108,6 +139,7 @@ public class OutputWriter {
         for (int i = 0; i < 6; i++) {
             sheet.setColumnWidth(i, 4500);
         }
+
     }
 
     private CellStyle getBodyStyle(Workbook wb) {
@@ -149,4 +181,17 @@ public class OutputWriter {
         style.setBorderRight(BorderStyle.THIN);
         return style;
     }
+
+    private static class RateBucket {
+        final String groupId;
+        final double rate;
+        double hours;
+
+        RateBucket(String groupId, double rate) {
+            this.groupId = groupId;
+            this.rate = rate;
+            this.hours = 0;
+        }
+    }
+
 }

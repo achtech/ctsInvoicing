@@ -74,6 +74,8 @@ public class InputRowProcessor {
 
         // Extract rate from column C text (for GroupId mapping)
         String columnCText = getStringCellValue(row.getCell(2)); // Column C
+        String columnBText = getStringCellValue(row.getCell(1)); // Column B (person/label)
+        String adjustmentType = detectAdjustmentType(columnBText, columnCText);
         BigDecimal columnG = getBigDecimalFromCell(row.getCell(6), evaluator); // Column G
 
         BigDecimal rate = extractRateFromText(columnCText);
@@ -103,12 +105,11 @@ public class InputRowProcessor {
                 groupId = "Guardias-50";
                 referenceRate = new BigDecimal("50.00");
             } else {
-                // Look up GroupId from reference data
+                // Use FY26 COGS grouping for the normal rate summary.
                 groupId = referenceData.getGroupByApproximateRate(rate);
                 if (groupId != null) {
                     referenceRate = referenceData.getRateByGroup(groupId);
                 } else {
-                    // Rate not found in ReferenceData - create a placeholder group
                     groupId = "Other_" + rate.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString().replace(".", "_");
                     referenceRate = rate;
                 }
@@ -129,22 +130,26 @@ public class InputRowProcessor {
             return null;
         }
 
-        // Extract hours from column D
+        // Extract hours from source column D (pass-through grouping behavior).
         double hours = getDoubleCellValue(row.getCell(3));
 
-        // For Tools/expenses (rate=0), show cost in both Hours and Rate columns
+        // For Tools/expenses (rate=0), keep legacy behavior where value is tracked as hours too.
         if ("Tools".equals(groupId)) {
             hours = cost.doubleValue();
-        } else if (hours == 0 && cost.doubleValue() != 0 && referenceRate != null && referenceRate.doubleValue() != 0) {
-            // Only for regular groups calculate hours from cost
-            hours = cost.doubleValue() / referenceRate.doubleValue();
         }
 
         // Store for debugging
         processedData.add(new ProcessedDataEntry(groupId, rate, referenceRate, 
                                                   hours, columnG, cost));
 
-        return new RowData(groupId, hours, cost.doubleValue());
+        double baseRate = rate == null ? 0.0 : rate.doubleValue();
+        double sourceRate = baseRate;
+        if (adjustmentType != null && columnG != null && columnG.compareTo(BigDecimal.ZERO) != 0) {
+            sourceRate = columnG.doubleValue();
+        }
+        double mappedRate = referenceRate == null ? 0.0 : referenceRate.doubleValue();
+        double quantityMultiplier = detectQuantityMultiplier(columnCText);
+        return new RowData(groupId, sourceRate, mappedRate, baseRate, hours, cost.doubleValue(), adjustmentType, quantityMultiplier);
     }
 
     /**
@@ -249,18 +254,61 @@ public class InputRowProcessor {
         return str != null && !str.trim().isEmpty();
     }
 
+    private String detectAdjustmentType(String columnBText, String columnCText) {
+        String b = columnBText == null ? "" : columnBText.toLowerCase();
+        String c = columnCText == null ? "" : columnCText.toLowerCase();
+
+        if (b.contains("sick leave")) {
+            return "Sick leave";
+        }
+        if (b.contains("unplanned vacation")) {
+            return "Unplanned vacation";
+        }
+        if (b.contains("extra hours") || c.contains("horas extra")) {
+            return "Extra hours";
+        }
+        if (c.contains("ajuste")) {
+            return "Other adjustment";
+        }
+        return null;
+    }
+
+    private double detectQuantityMultiplier(String columnCText) {
+        String c = columnCText == null ? "" : columnCText.toLowerCase();
+        if (!c.contains("horas extra")) {
+            return 1.0;
+        }
+        if (c.contains("extendido")) {
+            return 1.5;
+        }
+        if (c.contains("normal")) {
+            return 1.25;
+        }
+        return 1.0;
+    }
+
     /**
      * Data class for returning processed row data.
      */
     public static class RowData {
         private final String groupId;
+        private final double sourceRate;
+        private final double mappedRate;
+        private final double baseRate;
         private final double hours;
         private final double cost;
+        private final String adjustmentType;
+        private final double quantityMultiplier;
 
-        public RowData(String groupId, double hours, double cost) {
+        public RowData(String groupId, double sourceRate, double mappedRate, double baseRate, double hours, double cost, String adjustmentType, double quantityMultiplier) {
             this.groupId = groupId;
+            this.sourceRate = sourceRate;
+            this.mappedRate = mappedRate;
+            this.baseRate = baseRate;
             this.hours = hours;
             this.cost = cost;
+            this.adjustmentType = adjustmentType;
+            this.quantityMultiplier = quantityMultiplier;
         }
 
         public String getGroupId() {
@@ -273,6 +321,26 @@ public class InputRowProcessor {
 
         public double getCost() {
             return cost;
+        }
+
+        public double getSourceRate() {
+            return sourceRate;
+        }
+
+        public double getMappedRate() {
+            return mappedRate;
+        }
+
+        public double getBaseRate() {
+            return baseRate;
+        }
+
+        public String getAdjustmentType() {
+            return adjustmentType;
+        }
+
+        public double getQuantityMultiplier() {
+            return quantityMultiplier;
         }
     }
 }

@@ -4,6 +4,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.Cell;
@@ -25,14 +26,15 @@ public class ReferenceData {
 
     public void load(InputStream is) throws IOException {
         try (Workbook wb = new XSSFWorkbook(is)) {
-            Sheet sheet = wb.getSheetAt(0); // Reference Table: Column A = GroupId, Column C = FY26 Rate
+            Sheet sheet = wb.getSheetAt(0);
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Skip header
                 String groupId = getStringCellValue(row.getCell(0)); // Column A
                 BigDecimal rate = getBigDecimalFromCell(row.getCell(2));    // Column C (FY26)
                 if (groupId != null && rate!=null && rate.compareTo(BigDecimal.ZERO) > 0) {
-                    groupToRate.put(groupId, rate);
-                    rateToGroup.put(rate, groupId);
+                    BigDecimal normalizedRate = normalizeRate(rate);
+                    groupToRate.put(groupId, normalizedRate);
+                    rateToGroup.put(normalizedRate, groupId);
                 }
             }
         }
@@ -76,8 +78,9 @@ public class ReferenceData {
         double tolerance = 0.5; // Allow small differences
         double rateFromInvoice = rate.doubleValue();
         // Try exact match first
-        if (rateToGroup.containsKey(rateFromInvoice)) {
-            return rateToGroup.get(rateFromInvoice);
+        BigDecimal normalizedRate = normalizeRate(rate);
+        if (rateToGroup.containsKey(normalizedRate)) {
+            return rateToGroup.get(normalizedRate);
         }
         
         // Find closest match within tolerance
@@ -98,6 +101,10 @@ public class ReferenceData {
     public BigDecimal getCorrectRateByApproximate(BigDecimal rate) {
         String groupId = getGroupByApproximateRate(rate);
         return groupId != null ? groupToRate.get(groupId) : null;
+    }
+
+    private static BigDecimal normalizeRate(BigDecimal rate) {
+        return rate.setScale(2, RoundingMode.HALF_UP);
     }
 
     private static String getStringCellValue(Cell cell) {

@@ -119,7 +119,7 @@ public class UnifiedExecutionService {
                     }
 
                     OutputWriter writer = new OutputWriter(referenceData, aggregator);
-                    writer.writeSheet(outputWorkbook, toEnglishMonthName(monthSpa, now));
+                    writer.writeSheet(outputWorkbook, toEnglishMonthName(monthSpa, now), filesReader.getProcessedRows());
                 }
 
                 String rateOut = new File(rateFolder, "Rate Forecast " + periodDisplay + ".xlsx").getAbsolutePath();

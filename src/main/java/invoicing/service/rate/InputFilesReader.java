@@ -9,12 +9,15 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.text.Normalizer;
 import java.util.Locale;
 
 public class InputFilesReader {
     private final InputRowProcessor rowProcessor;
     private final GroupAggregator aggregator;
+    private final List<InputRowProcessor.RowData> processedRows = new ArrayList<>();
 
     public InputFilesReader(InputRowProcessor rowProcessor, GroupAggregator aggregator) {
         this.rowProcessor = rowProcessor;
@@ -31,6 +34,7 @@ public class InputFilesReader {
                 InputRowProcessor.RowData result = rowProcessor.processRow(row, evaluator);
                 if (result != null) {
                     aggregator.add(result.getGroupId(), "user", result.getHours(), result.getCost());
+                    processedRows.add(result);
                 }
             }
         }
@@ -50,6 +54,7 @@ public class InputFilesReader {
                 InputRowProcessor.RowData result = rowProcessor.processRow(row, evaluator);
                 if (result != null) {
                     aggregator.add(result.getGroupId(), "user", result.getHours(), result.getCost());
+                    processedRows.add(result);
                 }
             }
             return true;
@@ -94,5 +99,9 @@ public class InputFilesReader {
         return Normalizer.normalize(value, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}+", "")
                 .toLowerCase(Locale.ROOT);
+    }
+
+    public List<InputRowProcessor.RowData> getProcessedRows() {
+        return new ArrayList<>(processedRows);
     }
 }

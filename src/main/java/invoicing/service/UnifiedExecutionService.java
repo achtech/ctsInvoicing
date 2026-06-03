@@ -50,7 +50,7 @@ public class UnifiedExecutionService {
 
     public File runUnified(File targetDir, List<File> inputs, int months, boolean useManual, Listener listener) {
         LocalDateTime now = LocalDateTime.now();
-        List<String> monthNamesSpa = detectRequestedMonthsSpanish(inputs, months, listener);
+        List<String> monthNamesSpa = detectRequestedMonthsSpanish(inputs, months, useManual, listener);
         String currentMonthStr = buildPeriodToken(monthNamesSpa, now.getYear());
         String periodDisplay = buildPeriodDisplay(monthNamesSpa, now.getYear());
         String runStamp = now.format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
@@ -68,9 +68,10 @@ public class UnifiedExecutionService {
         listener.log("=== STARTING UNIFIED EXECUTION ===");
         listener.log("Output Folder : " + mainOutputFolder.getAbsolutePath());
         listener.log("Months mode   : " + (useManual ? "MANUAL (" + months + " months)" : "AUTO-DETECT from Facturacion sheets"));
+        listener.log("Detected months: " + (monthNamesSpa.isEmpty() ? "(none)" : String.join(", ", monthNamesSpa)));
 
-        runRateModule(now, rateFolder, inputs, months, periodDisplay, listener);
-        runExtModule(extFolder, inputs, months, periodDisplay, listener);
+        runRateModule(now, rateFolder, inputs, months, useManual, periodDisplay, listener);
+        runExtModule(extFolder, inputs, months, useManual, periodDisplay, listener);
         runMonthModule(monthFolder, inputs, months, useManual, listener);
 
         listener.setProgress(3, "Completed", "All modules finished successfully.");
@@ -79,11 +80,11 @@ public class UnifiedExecutionService {
         return mainOutputFolder;
     }
 
-    private void runRateModule(LocalDateTime now, File rateFolder, List<File> inputs, int months, String periodDisplay, Listener listener) {
+    private void runRateModule(LocalDateTime now, File rateFolder, List<File> inputs, int months, boolean useManual, String periodDisplay, Listener listener) {
         listener.setProgress(0, "Step 1/3 - Rate", "Running Forecast By Rate...");
         listener.log("\n[1/3] Running Forecast By Rate...");
         try {
-            List<String> monthNamesSpa = detectRequestedMonthsSpanish(inputs, months, listener);
+            List<String> monthNamesSpa = detectRequestedMonthsSpanish(inputs, months, useManual, listener);
             if (monthNamesSpa.isEmpty()) {
                 listener.log("  - Rate Warning: No requested Facturacion month sheets found.");
                 return;
@@ -134,11 +135,11 @@ public class UnifiedExecutionService {
         }
     }
 
-    private void runExtModule(File extFolder, List<File> inputs, int months, String periodDisplay, Listener listener) {
+    private void runExtModule(File extFolder, List<File> inputs, int months, boolean useManual, String periodDisplay, Listener listener) {
         listener.setProgress(1, "Step 2/3 - ExtCode", "Running Forecast By ExtCode...");
         listener.log("\n[2/3] Running Forecast By ExtCode...");
         try {
-            List<String> monthNamesSpa = detectRequestedMonthsSpanish(inputs, months, listener);
+            List<String> monthNamesSpa = detectRequestedMonthsSpanish(inputs, months, useManual, listener);
             if (monthNamesSpa.isEmpty()) {
                 listener.log("  - ExtCode Warning: No requested Facturacion month sheets found.");
                 return;
@@ -193,7 +194,11 @@ public class UnifiedExecutionService {
         try {
             for (File f : inputs) {
                 try {
-                    int currentMonths = months;
+                    int currentMonths = useManual ? months : countMonthSheets(f, listener);
+                    if (currentMonths <= 0) {
+                        listener.log("  - Month Warning: No Facturacion sheets found in " + f.getName() + ". Skipping file.");
+                        continue;
+                    }
                     listener.log("  - Processing " + f.getName() + " with " + currentMonths + " months...");
                     ExecuteService.executeScript(
                             f.getAbsolutePath(),
@@ -233,10 +238,19 @@ public class UnifiedExecutionService {
 
         try (Workbook mergedWorkbook = new XSSFWorkbook()) {
             CellStyle headerStyle = Helper.getHeaderStyle(mergedWorkbook);
+            CellStyle projectBandStyle = Helper.getProjectBandStyle(mergedWorkbook);
             CellStyle footerCurrencyStyle = Helper.getFooterCurrencyStyle(mergedWorkbook);
             CellStyle leftStyle = Helper.getLeftStandardStyle(mergedWorkbook);
             CellStyle centerStyle = Helper.getCenterStandardStyle(mergedWorkbook);
             CellStyle currencyStyle = Helper.getCurrencyStyle(mergedWorkbook);
+            CellStyle categoryStyle = Helper.getCategoryStyle(mergedWorkbook);
+            CellStyle dayValueStyle = Helper.getDayValueStyle(mergedWorkbook);
+            CellStyle emptyDayStyle = Helper.getEmptyDayStyle(mergedWorkbook);
+            CellStyle dateStyle = Helper.getDateStyle(mergedWorkbook);
+            CellStyle vacanceStyle = Helper.getVacanceStyle(mergedWorkbook);
+            CellStyle freedayStyle = Helper.getFreedayStyle(mergedWorkbook);
+            CellStyle sickLeaveStyle = Helper.getSickLeaveStyle(mergedWorkbook);
+            CellStyle legalAbsenceStyle = Helper.getLegalAbsenceStyle(mergedWorkbook);
 
             Map<String, Sheet> targetSheets = new LinkedHashMap<>();
             Map<String, Integer> sheetRowIndex = new LinkedHashMap<>();
@@ -288,14 +302,19 @@ public class UnifiedExecutionService {
                         int activeMaxCol = sheetMaxCol.get(sheetKey);
 
                         Row titleRow = mergedSheet.createRow(mergedRowIndex++);
+                        titleRow.setHeightInPoints(20f);
                         Cell projectTitleCell = titleRow.createCell(0);
-                        projectTitleCell.setCellValue("Project source: " + file.getName());
-                        projectTitleCell.setCellStyle(headerStyle);
+                        projectTitleCell.setCellValue(file.getName());
+                        projectTitleCell.setCellStyle(projectBandStyle);
+                        for (int col = 1; col <= 2; col++) {
+                            Cell fillerCell = titleRow.createCell(col);
+                            fillerCell.setCellStyle(projectBandStyle);
+                        }
                         mergedSheet.addMergedRegion(new CellRangeAddress(
                                 titleRow.getRowNum(),
                                 titleRow.getRowNum(),
                                 0,
-                                activeMaxCol
+                                2
                         ));
 
                         double runningHours = sheetHoursTotal.get(sheetKey);
@@ -351,11 +370,20 @@ public class UnifiedExecutionService {
                                     targetRow,
                                     sourceRow,
                                     evaluator,
+                                    projectBandStyle,
                                     headerStyle,
                                     footerCurrencyStyle,
                                     leftStyle,
                                     centerStyle,
                                     currencyStyle,
+                                    categoryStyle,
+                                    dayValueStyle,
+                                    emptyDayStyle,
+                                    dateStyle,
+                                    vacanceStyle,
+                                    freedayStyle,
+                                    sickLeaveStyle,
+                                    legalAbsenceStyle,
                                     activeRateCol,
                                     activeHoursCol,
                                     activeCostCol,
@@ -395,7 +423,7 @@ public class UnifiedExecutionService {
                     mergedRowIndex++;
                     Row grandTotalRow = mergedSheet.createRow(mergedRowIndex);
 
-                    int grandLabelStartCol = 4;
+                    int grandLabelStartCol = Math.max(2, hoursCol - 2);
                     int grandLabelEndCol = Math.max(grandLabelStartCol, hoursCol - 1);
                     Cell labelCell = grandTotalRow.createCell(grandLabelStartCol);
                     labelCell.setCellValue("GRAND TOTAL (ALL PROJECTS)");
@@ -417,8 +445,23 @@ public class UnifiedExecutionService {
                 }
 
                 for (int i = 0; i <= maxCol; i++) {
-                    mergedSheet.autoSizeColumn(i);
+                    if (i == 0) {
+                        mergedSheet.setColumnWidth(i, 11 * 256);
+                    } else if (i == 1) {
+                        mergedSheet.setColumnWidth(i, 40 * 256);
+                    } else if (i == 2) {
+                        mergedSheet.setColumnWidth(i, 20 * 256);
+                    } else if (i == rateCol) {
+                        mergedSheet.setColumnWidth(i, 9 * 256);
+                    } else if (i > rateCol && i < hoursCol) {
+                        mergedSheet.setColumnWidth(i, 3 * 256);
+                    } else if (i == hoursCol || i == costCol) {
+                        mergedSheet.setColumnWidth(i, 13 * 256);
+                    } else {
+                        mergedSheet.autoSizeColumn(i);
+                    }
                 }
+                mergedSheet.setDisplayGridlines(false);
             }
 
             try (FileOutputStream fos = new FileOutputStream(mergedFile)) {
@@ -438,12 +481,15 @@ public class UnifiedExecutionService {
     }
 
     private void applyMergedRowStyle(Row targetRow, Row sourceRow, FormulaEvaluator evaluator,
-                                     CellStyle headerStyle, CellStyle footerCurrencyStyle,
+                                     CellStyle projectBandStyle, CellStyle headerStyle, CellStyle footerCurrencyStyle,
                                      CellStyle leftStyle, CellStyle centerStyle, CellStyle currencyStyle,
+                                     CellStyle categoryStyle, CellStyle dayValueStyle, CellStyle emptyDayStyle, CellStyle dateStyle,
+                                     CellStyle vacanceStyle, CellStyle freedayStyle, CellStyle sickLeaveStyle, CellStyle legalAbsenceStyle,
                                      int rateCol, int hoursCol, int costCol, int maxCol) {
-        String label = getStringCellValue(sourceRow.getCell(0), evaluator).trim().toLowerCase();
-        boolean headerRow = label.startsWith("empl");
-        boolean totalRow = label.startsWith("total ");
+        boolean projectRow = rowContainsToken(sourceRow, evaluator, "project name");
+        boolean headerRow = rowContainsToken(sourceRow, evaluator, "empl");
+        boolean totalRow = rowContainsToken(sourceRow, evaluator, "total");
+        boolean adjustmentLike = isAdjustmentLike(sourceRow);
 
         for (int c = 0; c <= maxCol; c++) {
             Cell cell = targetRow.getCell(c);
@@ -451,13 +497,24 @@ public class UnifiedExecutionService {
                 cell = targetRow.createCell(c);
             }
 
+            if (projectRow) {
+                if (c <= 2) {
+                    cell.setCellStyle(projectBandStyle);
+                }
+                continue;
+            }
+
             if (headerRow) {
-                cell.setCellStyle(headerStyle);
+                if (c > rateCol && c < hoursCol) {
+                    cell.setCellStyle(dateStyle);
+                } else {
+                    cell.setCellStyle(headerStyle);
+                }
                 continue;
             }
 
             if (totalRow) {
-                if (c == rateCol || c == costCol) {
+                if (c == costCol) {
                     cell.setCellStyle(footerCurrencyStyle);
                 } else {
                     cell.setCellStyle(headerStyle);
@@ -467,21 +524,72 @@ public class UnifiedExecutionService {
 
             if (c == 0) {
                 cell.setCellStyle(centerStyle);
-            } else if (c == 1 || c == 2) {
+            } else if (c == 1) {
                 cell.setCellStyle(leftStyle);
+            } else if (c == 2) {
+                cell.setCellStyle(categoryStyle);
             } else if (c == rateCol || c == costCol) {
                 cell.setCellStyle(currencyStyle);
             } else if (c == hoursCol) {
                 cell.setCellStyle(centerStyle);
+            } else if (c > rateCol && c < hoursCol) {
+                applyMergedDayStyle(cell, adjustmentLike, centerStyle, dayValueStyle, emptyDayStyle, vacanceStyle, freedayStyle, sickLeaveStyle, legalAbsenceStyle);
             } else {
                 cell.setCellStyle(centerStyle);
             }
         }
     }
 
+    private void applyMergedDayStyle(Cell cell, boolean adjustmentLike,
+                                     CellStyle centerStyle, CellStyle dayValueStyle, CellStyle emptyDayStyle,
+                                     CellStyle vacanceStyle, CellStyle freedayStyle,
+                                     CellStyle sickLeaveStyle, CellStyle legalAbsenceStyle) {
+        String value = cell == null ? "" : cell.toString();
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        switch (normalized) {
+            case "V":
+                cell.setCellStyle(vacanceStyle);
+                break;
+            case "F":
+                cell.setCellStyle(freedayStyle);
+                break;
+            case "S":
+                cell.setCellStyle(sickLeaveStyle);
+                break;
+            case "A":
+                cell.setCellStyle(legalAbsenceStyle);
+                break;
+            default:
+                if (normalized.isEmpty()) {
+                    cell.setCellStyle(adjustmentLike ? centerStyle : emptyDayStyle);
+                } else if (isNumericText(normalized)) {
+                    cell.setCellStyle(dayValueStyle);
+                } else {
+                    cell.setCellStyle(adjustmentLike ? centerStyle : emptyDayStyle);
+                }
+                break;
+        }
+    }
+
+    private boolean isAdjustmentLike(Row row) {
+        Cell employeeCell = row.getCell(0);
+        Cell categoryCell = row.getCell(2);
+        boolean hasEmployeeId = employeeCell != null && employeeCell.getCellType() == CellType.NUMERIC;
+        boolean hasCategory = categoryCell != null && !categoryCell.toString().trim().isEmpty();
+        return !hasEmployeeId && !hasCategory;
+    }
+
+    private boolean isNumericText(String value) {
+        try {
+            Double.parseDouble(value);
+            return true;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
+    }
+
     private boolean isHeaderRow(Row row, FormulaEvaluator evaluator) {
-        String label = getStringCellValue(row.getCell(0), evaluator).trim().toLowerCase();
-        return label.startsWith("empl");
+        return rowContainsToken(row, evaluator, "empl");
     }
 
     private int findColumnIndexByHeader(Row row, FormulaEvaluator evaluator, String token) {
@@ -500,8 +608,25 @@ public class UnifiedExecutionService {
     }
 
     private boolean isGrandTotalRow(Row row, FormulaEvaluator evaluator) {
-        String label = getStringCellValue(row.getCell(0), evaluator).trim().toLowerCase();
-        return label.contains("grand total");
+        return rowContainsToken(row, evaluator, "grand total");
+    }
+
+    private boolean rowContainsToken(Row row, FormulaEvaluator evaluator, String token) {
+        if (row == null) {
+            return false;
+        }
+        String normalizedToken = token.toLowerCase(Locale.ROOT);
+        short last = row.getLastCellNum();
+        if (last <= 0) {
+            return false;
+        }
+        for (int i = 0; i < last; i++) {
+            String value = getStringCellValue(row.getCell(i), evaluator).trim().toLowerCase(Locale.ROOT);
+            if (!value.isEmpty() && value.contains(normalizedToken)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String getStringCellValue(Cell cell, FormulaEvaluator evaluator) {
@@ -612,7 +737,7 @@ public class UnifiedExecutionService {
         return count;
     }
 
-    private List<String> detectRequestedMonthsSpanish(List<File> inputs, int requestedMonths, Listener listener) {
+    private List<String> detectRequestedMonthsSpanish(List<File> inputs, int requestedMonths, boolean useManual, Listener listener) {
         Set<String> months = new LinkedHashSet<>();
         for (File f : inputs) {
             try (Workbook wb = WorkbookFactory.create(f)) {
@@ -630,13 +755,13 @@ public class UnifiedExecutionService {
             } catch (Exception e) {
                 listener.log("  - Warning: Failed month detection in " + f.getName() + ": " + e.getMessage());
             }
-            if (months.size() >= requestedMonths) {
+            if (useManual && months.size() >= requestedMonths) {
                 break;
             }
         }
 
         List<String> ordered = new ArrayList<>(months);
-        if (ordered.size() > requestedMonths) {
+        if (useManual && ordered.size() > requestedMonths) {
             return ordered.subList(0, requestedMonths);
         }
         return ordered;

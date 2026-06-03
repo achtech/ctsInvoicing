@@ -245,7 +245,7 @@ public class ExecuteService {
                         String hoursColLetter = Helper.getColumnLetter(hoursCol);
                         String costColLetter = Helper.getColumnLetter(costCol);
 
-                        int grandLabelStartCol = 4;
+                        int grandLabelStartCol = Math.max(2, hoursCol - 2);
                         int grandLabelEndCol = Math.max(grandLabelStartCol, hoursCol - 1);
                         Cell labelCell = grandTotalRow.createCell(grandLabelStartCol);
                         labelCell.setCellValue("GRAND TOTAL (ALL PROJECTS)");

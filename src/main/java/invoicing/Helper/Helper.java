@@ -12,7 +12,6 @@ import java.nio.file.Path;
 import java.time.Month;
 import java.time.YearMonth;
 import java.util.Locale;
-import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 
 public class Helper {
 
@@ -268,6 +267,65 @@ public class Helper {
         headerStyle.setBorderLeft(BorderStyle.THIN);
         headerStyle.setBorderRight(BorderStyle.THIN);
         return headerStyle;
+    }
+
+    public static CellStyle getProjectBandStyle(Workbook outputWorkbook) {
+        CellStyle style = outputWorkbook.createCellStyle();
+        Font font = outputWorkbook.createFont();
+        font.setColor(IndexedColors.WHITE.getIndex());
+        font.setBold(true);
+        style.setFont(font);
+        style.setFillForegroundColor(new XSSFColor(new byte[]{(byte) 237, (byte) 125, (byte) 49}, null));
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        return style;
+    }
+
+    public static CellStyle getCategoryStyle(Workbook outputWorkbook) {
+        CellStyle style = outputWorkbook.createCellStyle();
+        Font font = outputWorkbook.createFont();
+        font.setColor(IndexedColors.WHITE.getIndex());
+        style.setFont(font);
+        style.setFillForegroundColor(new XSSFColor(new byte[]{(byte) 255, (byte) 128, (byte) 128}, null));
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        return style;
+    }
+
+    public static CellStyle getDayValueStyle(Workbook outputWorkbook) {
+        CellStyle style = outputWorkbook.createCellStyle();
+        DataFormat dataFormat = outputWorkbook.createDataFormat();
+        style.setDataFormat(dataFormat.getFormat("0.####"));
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        return style;
+    }
+
+    public static CellStyle getEmptyDayStyle(Workbook outputWorkbook) {
+        CellStyle style = outputWorkbook.createCellStyle();
+        style.setFillForegroundColor(new XSSFColor(new byte[]{(byte) 255, (byte) 128, (byte) 128}, null));
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        return style;
     }
 
     public static int numberOfDays(String sheetName) {

@@ -278,6 +278,9 @@ public class InputRowProcessor {
         if (!c.contains("horas extra")) {
             return 1.0;
         }
+        if (c.contains("domingo") || c.contains("religioso")) {
+            return 2.0;
+        }
         if (c.contains("extendido")) {
             return 1.5;
         }

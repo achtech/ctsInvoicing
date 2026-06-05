@@ -447,7 +447,7 @@ public class UnifiedExecutionService {
                     } else if (i == rateCol) {
                         mergedSheet.setColumnWidth(i, 9 * 256);
                     } else if (i > rateCol && i < hoursCol) {
-                        mergedSheet.setColumnWidth(i, 5 * 256);
+                        mergedSheet.setColumnWidth(i, 7 * 256);
                     } else if (i == hoursCol || i == costCol) {
                         mergedSheet.setColumnWidth(i, 13 * 256);
                     } else {
@@ -530,6 +530,9 @@ public class UnifiedExecutionService {
                 cell.setCellStyle(centerStyle);
             } else if (c > rateCol && c < hoursCol) {
                 applyMergedDayStyle(cell, adjustmentLike, centerStyle, dayValueStyle, emptyDayStyle, vacanceStyle, freedayStyle, sickLeaveStyle, legalAbsenceStyle);
+                if (cell.getCellType() == CellType.NUMERIC) {
+                    cell.setCellStyle(dayValueStyle);
+                }
             } else {
                 cell.setCellStyle(centerStyle);
             }
@@ -559,6 +562,7 @@ public class UnifiedExecutionService {
                 if (normalized.isEmpty()) {
                     cell.setCellStyle(adjustmentLike ? centerStyle : emptyDayStyle);
                 } else if (isNumericText(normalized)) {
+                    cell.setCellValue(Double.parseDouble(normalized));
                     cell.setCellStyle(dayValueStyle);
                 } else {
                     cell.setCellStyle(adjustmentLike ? centerStyle : emptyDayStyle);

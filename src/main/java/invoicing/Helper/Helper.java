@@ -304,8 +304,6 @@ public class Helper {
 
     public static CellStyle getDayValueStyle(Workbook outputWorkbook) {
         CellStyle style = outputWorkbook.createCellStyle();
-        DataFormat dataFormat = outputWorkbook.createDataFormat();
-        style.setDataFormat(dataFormat.getFormat("0.####"));
         style.setVerticalAlignment(VerticalAlignment.CENTER);
         style.setAlignment(HorizontalAlignment.CENTER);
         style.setBorderTop(BorderStyle.THIN);

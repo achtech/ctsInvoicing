@@ -467,7 +467,7 @@ public class DefaultExcelWriter implements ExcelWriter {
         sheet.setColumnWidth(2, 20 * 256);
         sheet.setColumnWidth(3, 9 * 256);
         for (int i = 0; i < nbrDaysInThisMonth; i++) {
-            sheet.setColumnWidth(4 + i, 5 * 256);
+            sheet.setColumnWidth(4 + i, 7 * 256);
         }
         sheet.setColumnWidth(4 + nbrDaysInThisMonth, 13 * 256);
         sheet.setColumnWidth(5 + nbrDaysInThisMonth, 13 * 256);
@@ -605,6 +605,7 @@ public class DefaultExcelWriter implements ExcelWriter {
                 if (normalized.isEmpty()) {
                     targetDayCell.setCellStyle(adjustmentLike ? centerStyle : emptyDayStyle);
                 } else if (isNumericText(normalized)) {
+                    targetDayCell.setCellValue(Double.parseDouble(normalized));
                     targetDayCell.setCellStyle(dayValueStyle);
                 } else {
                     targetDayCell.setCellStyle(adjustmentLike ? centerStyle : emptyDayStyle);

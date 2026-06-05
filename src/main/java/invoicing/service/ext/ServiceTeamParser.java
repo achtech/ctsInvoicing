@@ -4,9 +4,19 @@ package invoicing.service.ext;
 import java.util.*;
 
 import invoicing.entities.ServiceTeam;
+import invoicing.Helper.EmployeeProjectReferenceData;
 import invoicing.Helper.ServiceTeamMaps;
 
 public class ServiceTeamParser {
+    private final EmployeeProjectReferenceData referenceData;
+
+    public ServiceTeamParser() {
+        try {
+            referenceData = EmployeeProjectReferenceData.load();
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to load employee/project reference data", e);
+        }
+    }
 
     public List<ServiceTeam> parse(List<String> rawItems) {
         List<ServiceTeam> list = new ArrayList<>();
@@ -23,7 +33,7 @@ public class ServiceTeamParser {
             st.setProjectName(projectName);
             st.setExtCode(ext);
             st.setBuDescription(ServiceTeamMaps.BU_DESCRIPTION_MAP.getOrDefault(bu, ""));
-            st.setProjectDescription(ServiceTeamMaps.EXT_DESCRIPTION_MAP.getOrDefault(ext, ""));
+            st.setProjectDescription(referenceData.findProjectDescription(ext));
             if(!projectName.isEmpty()) list.add(st);
         }
         return list;

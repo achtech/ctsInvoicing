@@ -301,22 +301,6 @@ public class UnifiedExecutionService {
                         int activeCostCol = sheetCostCol.get(sheetKey);
                         int activeMaxCol = sheetMaxCol.get(sheetKey);
 
-                        Row titleRow = mergedSheet.createRow(mergedRowIndex++);
-                        titleRow.setHeightInPoints(20f);
-                        Cell projectTitleCell = titleRow.createCell(0);
-                        projectTitleCell.setCellValue(file.getName());
-                        projectTitleCell.setCellStyle(projectBandStyle);
-                        for (int col = 1; col <= 2; col++) {
-                            Cell fillerCell = titleRow.createCell(col);
-                            fillerCell.setCellStyle(projectBandStyle);
-                        }
-                        mergedSheet.addMergedRegion(new CellRangeAddress(
-                                titleRow.getRowNum(),
-                                titleRow.getRowNum(),
-                                0,
-                                2
-                        ));
-
                         double runningHours = sheetHoursTotal.get(sheetKey);
                         double runningCost = sheetCostTotal.get(sheetKey);
 
@@ -389,6 +373,15 @@ public class UnifiedExecutionService {
                                     activeCostCol,
                                     activeMaxCol
                             );
+
+                            if (isProjectBandRow(sourceRow, evaluator)) {
+                                mergedSheet.addMergedRegion(new CellRangeAddress(
+                                        targetRow.getRowNum(),
+                                        targetRow.getRowNum(),
+                                        0,
+                                        2
+                                ));
+                            }
                         }
 
                         for (int i = 0; i < MERGED_FILE_SEPARATOR_ROWS; i++) {
@@ -454,14 +447,14 @@ public class UnifiedExecutionService {
                     } else if (i == rateCol) {
                         mergedSheet.setColumnWidth(i, 9 * 256);
                     } else if (i > rateCol && i < hoursCol) {
-                        mergedSheet.setColumnWidth(i, 3 * 256);
+                        mergedSheet.setColumnWidth(i, 5 * 256);
                     } else if (i == hoursCol || i == costCol) {
                         mergedSheet.setColumnWidth(i, 13 * 256);
                     } else {
                         mergedSheet.autoSizeColumn(i);
                     }
                 }
-                mergedSheet.setDisplayGridlines(false);
+                mergedSheet.setDisplayGridlines(true);
             }
 
             try (FileOutputStream fos = new FileOutputStream(mergedFile)) {
@@ -486,7 +479,7 @@ public class UnifiedExecutionService {
                                      CellStyle categoryStyle, CellStyle dayValueStyle, CellStyle emptyDayStyle, CellStyle dateStyle,
                                      CellStyle vacanceStyle, CellStyle freedayStyle, CellStyle sickLeaveStyle, CellStyle legalAbsenceStyle,
                                      int rateCol, int hoursCol, int costCol, int maxCol) {
-        boolean projectRow = rowContainsToken(sourceRow, evaluator, "project name");
+        boolean projectRow = isProjectBandRow(sourceRow, evaluator);
         boolean headerRow = rowContainsToken(sourceRow, evaluator, "empl");
         boolean totalRow = rowContainsToken(sourceRow, evaluator, "total");
         boolean adjustmentLike = isAdjustmentLike(sourceRow);
@@ -514,7 +507,10 @@ public class UnifiedExecutionService {
             }
 
             if (totalRow) {
-                if (c == costCol) {
+                int totalLabelStartCol = Math.max(2, hoursCol - 2);
+                if (c < totalLabelStartCol) {
+                    cell.setCellStyle(centerStyle);
+                } else if (c == costCol) {
                     cell.setCellStyle(footerCurrencyStyle);
                 } else {
                     cell.setCellStyle(headerStyle);
@@ -569,6 +565,22 @@ public class UnifiedExecutionService {
                 }
                 break;
         }
+    }
+
+    private boolean isProjectBandRow(Row row, FormulaEvaluator evaluator) {
+        if (row == null || isHeaderRow(row, evaluator) || isGrandTotalRow(row, evaluator)) {
+            return false;
+        }
+
+        String firstCell = getStringCellValue(row.getCell(0), evaluator).trim();
+        if (firstCell.isEmpty()) {
+            return false;
+        }
+
+        String secondCell = getStringCellValue(row.getCell(1), evaluator).trim();
+        String thirdCell = getStringCellValue(row.getCell(2), evaluator).trim();
+        String fourthCell = getStringCellValue(row.getCell(3), evaluator).trim();
+        return secondCell.isEmpty() && thirdCell.isEmpty() && fourthCell.isEmpty();
     }
 
     private boolean isAdjustmentLike(Row row) {

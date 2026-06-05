@@ -1,9 +1,7 @@
 package invoicing.service.month.impl;
 
-import invoicing.Helper.CogsHelper;
+import invoicing.Helper.EmployeeProjectReferenceData;
 import invoicing.Helper.Helper;
-import invoicing.entities.CogsRecord;
-import invoicing.enums.FiscalYear;
 import invoicing.service.month.ExcelWriter;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -24,10 +22,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class DefaultExcelWriter implements ExcelWriter {
-    List<CogsRecord> recogs;
+    private final EmployeeProjectReferenceData referenceData;
 
     public DefaultExcelWriter() throws Exception {
-        recogs = CogsHelper.loadFromResources();
+        referenceData = EmployeeProjectReferenceData.load();
     }
 
     @Override
@@ -81,14 +79,37 @@ public class DefaultExcelWriter implements ExcelWriter {
         int nbrDaysInThisMonth = Helper.numberOfDays(invoicingSheetName);
         int transformedHoursCol = 4 + nbrDaysInThisMonth;
         int transformedCostCol = transformedHoursCol + 1;
-        int hoursCol = 4;
-        int costCol = 5;
+        int firstDayCol = 4;
+        int hoursCol = firstDayCol + nbrDaysInThisMonth;
+        int costCol = hoursCol + 1;
 
         CellStyle headerStyle = Helper.getHeaderStyle(outputWorkbook);
+        CellStyle projectBandStyle = Helper.getProjectBandStyle(outputWorkbook);
         CellStyle centerStyle = Helper.getCenterStandardStyle(outputWorkbook);
         CellStyle leftStyle = Helper.getLeftStandardStyle(outputWorkbook);
         CellStyle currencyStyle = Helper.getCurrencyStyle(outputWorkbook);
+        CellStyle categoryStyle = Helper.getCategoryStyle(outputWorkbook);
+        CellStyle dayValueStyle = Helper.getDayValueStyle(outputWorkbook);
+        CellStyle emptyDayStyle = Helper.getEmptyDayStyle(outputWorkbook);
+        CellStyle dateStyle = Helper.getDateStyle(outputWorkbook);
+        CellStyle vacanceStyle = Helper.getVacanceStyle(outputWorkbook);
+        CellStyle freedayStyle = Helper.getFreedayStyle(outputWorkbook);
+        CellStyle sickLeaveStyle = Helper.getSickLeaveStyle(outputWorkbook);
+        CellStyle legalAbsenceStyle = Helper.getLegalAbsenceStyle(outputWorkbook);
         CellStyle footerCurrencyStyle = Helper.getFooterCurrencyStyle(outputWorkbook);
+
+        configureConsolidatedSheetLayout(outputSheet, nbrDaysInThisMonth);
+
+        Row projectRow = outputSheet.createRow(outputRowIndex++);
+        projectRow.setHeightInPoints(20f);
+        Cell projectNameCell = projectRow.createCell(0);
+        projectNameCell.setCellValue(serviceTeam);
+        projectNameCell.setCellStyle(projectBandStyle);
+        for (int col = 1; col <= 2; col++) {
+            Cell fillerCell = projectRow.createCell(col);
+            fillerCell.setCellStyle(projectBandStyle);
+        }
+        outputSheet.addMergedRegion(new CellRangeAddress(projectRow.getRowNum(), projectRow.getRowNum(), 0, 2));
 
         Row headerRow = outputSheet.createRow(outputRowIndex++);
         String[] headers = {"Empl. NÂ°", "Person", "Category", "Rate", "Working Hours", "Cost (Euro)"};
@@ -97,20 +118,66 @@ public class DefaultExcelWriter implements ExcelWriter {
             cell.setCellValue(headers[i]);
             cell.setCellStyle(headerStyle);
         }
+        headerRow.setHeightInPoints(20f);
+        String[] consolidatedHeaders = {"Empl. N" + '\u00B0', "Person", "Category", "Rates"};
+        for (int i = 0; i < consolidatedHeaders.length; i++) {
+            Cell cell = headerRow.getCell(i) != null ? headerRow.getCell(i) : headerRow.createCell(i);
+            cell.setCellValue(consolidatedHeaders[i]);
+            cell.setCellStyle(headerStyle);
+        }
+        for (int day = 1; day <= nbrDaysInThisMonth; day++) {
+            Cell dayCell = headerRow.getCell(firstDayCol + day - 1) != null
+                    ? headerRow.getCell(firstDayCol + day - 1)
+                    : headerRow.createCell(firstDayCol + day - 1);
+            dayCell.setCellValue(day);
+            dayCell.setCellStyle(dateStyle);
+        }
+        Cell hoursHeaderCell = headerRow.createCell(hoursCol);
+        hoursHeaderCell.setCellValue("Working Hours");
+        hoursHeaderCell.setCellStyle(headerStyle);
+        Cell costHeaderCell = headerRow.createCell(costCol);
+        costHeaderCell.setCellValue("Cost (Euro)");
+        costHeaderCell.setCellStyle(headerStyle);
 
         Map<BigDecimal, List<Row>> maps = getAllData(inputSheet);
         Map<BigDecimal, List<Row>> mapsByServiceTeam = filterRowsByServiceTeam(maps, serviceTeam);
         Map<BigDecimal, Row> mergedMaps = transformRows(inputWorkbook, facturacionSheetName, mapsByServiceTeam);
+        List<Integer> dataRowIndices = new ArrayList<>();
 
         for (Map.Entry<BigDecimal, Row> entry : mergedMaps.entrySet()) {
-            Row outputRow = outputSheet.createRow(outputRowIndex++);
-            writeCompactDataRow(outputRow, entry.getValue(), leftStyle, centerStyle, currencyStyle, transformedHoursCol, transformedCostCol, nbrDaysInThisMonth);
+            Row outputRow = outputSheet.createRow(outputRowIndex);
+            outputRow.setHeightInPoints(20f);
+            dataRowIndices.add(outputRowIndex);
+            outputRowIndex++;
+            writeConsolidatedDataRow(
+                    outputRow,
+                    entry.getValue(),
+                    leftStyle,
+                    centerStyle,
+                    currencyStyle,
+                    categoryStyle,
+                    dayValueStyle,
+                    emptyDayStyle,
+                    vacanceStyle,
+                    freedayStyle,
+                    sickLeaveStyle,
+                    legalAbsenceStyle,
+                    transformedHoursCol,
+                    transformedCostCol,
+                    nbrDaysInThisMonth,
+                    firstDayCol,
+                    hoursCol,
+                    costCol
+            );
         }
 
         int month = Helper.getMonthFromSheetName(invoicingSheetName);
         List<Row> ajustesRows = getAdjustmentSheetData(inputWorkbook, ajustesSheetName, serviceTeam, month);
         for (Row row : ajustesRows) {
-            Row outputRow = outputSheet.createRow(outputRowIndex++);
+            Row outputRow = outputSheet.createRow(outputRowIndex);
+            outputRow.setHeightInPoints(20f);
+            dataRowIndices.add(outputRowIndex);
+            outputRowIndex++;
 
             outputRow.createCell(0).setCellStyle(centerStyle);
 
@@ -134,6 +201,10 @@ public class DefaultExcelWriter implements ExcelWriter {
                         : adjustmentCost.divide(hourlyRate, 10, java.math.RoundingMode.HALF_UP);
             }
 
+            for (int dayCol = firstDayCol; dayCol < hoursCol; dayCol++) {
+                outputRow.createCell(dayCol).setCellStyle(centerStyle);
+            }
+
             Cell hoursCell = outputRow.createCell(hoursCol);
             hoursCell.setCellValue(Helper.round(computedHours.doubleValue()));
             hoursCell.setCellStyle(centerStyle);
@@ -148,24 +219,39 @@ public class DefaultExcelWriter implements ExcelWriter {
         }
 
         Row totalRow = outputSheet.createRow(outputRowIndex);
-        Cell totalLabelCell = totalRow.createCell(2);
+        totalRow.setHeightInPoints(20f);
+        int totalLabelStartCol = Math.max(2, hoursCol - 2);
+        int totalLabelEndCol = Math.max(totalLabelStartCol, hoursCol - 1);
+        Cell totalLabelCell = totalRow.createCell(totalLabelStartCol);
         totalLabelCell.setCellValue("Total");
         totalLabelCell.setCellStyle(headerStyle);
-        outputSheet.addMergedRegion(new CellRangeAddress(outputRowIndex, outputRowIndex, 2, 3));
+        outputSheet.addMergedRegion(new CellRangeAddress(outputRowIndex, outputRowIndex, totalLabelStartCol, totalLabelEndCol));
 
         String hoursColumnLetter = Helper.getColumnLetter(hoursCol);
         Cell totalHoursCell = totalRow.createCell(hoursCol);
-        totalHoursCell.setCellFormula("SUM(" + hoursColumnLetter + "2:" + hoursColumnLetter + outputRowIndex + ")");
+        totalHoursCell.setCellFormula(buildSumFormula(hoursColumnLetter, dataRowIndices));
         totalHoursCell.setCellStyle(headerStyle);
 
         String costColumnLetter = Helper.getColumnLetter(costCol);
         Cell totalCostCell = totalRow.createCell(costCol);
-        totalCostCell.setCellFormula("SUM(" + costColumnLetter + "2:" + costColumnLetter + outputRowIndex + ")");
+        totalCostCell.setCellFormula(buildSumFormula(costColumnLetter, dataRowIndices));
         totalCostCell.setCellStyle(footerCurrencyStyle);
 
-        for (int col = 0; col <= costCol; col++) {
-            outputSheet.autoSizeColumn(col);
+    }
+
+    private String buildSumFormula(String columnLetter, List<Integer> rowIndices) {
+        if (rowIndices.isEmpty()) {
+            return "0";
         }
+        StringBuilder formula = new StringBuilder("SUM(");
+        for (int i = 0; i < rowIndices.size(); i++) {
+            formula.append(columnLetter).append(rowIndices.get(i) + 1);
+            if (i < rowIndices.size() - 1) {
+                formula.append(",");
+            }
+        }
+        formula.append(")");
+        return formula.toString();
     }
 
     @Override
@@ -375,13 +461,13 @@ public class DefaultExcelWriter implements ExcelWriter {
     }
 
     private void configureConsolidatedSheetLayout(Sheet sheet, int nbrDaysInThisMonth) {
-        sheet.setDisplayGridlines(false);
+        sheet.setDisplayGridlines(true);
         sheet.setColumnWidth(0, 11 * 256);
         sheet.setColumnWidth(1, 40 * 256);
         sheet.setColumnWidth(2, 20 * 256);
         sheet.setColumnWidth(3, 9 * 256);
         for (int i = 0; i < nbrDaysInThisMonth; i++) {
-            sheet.setColumnWidth(4 + i, 3 * 256);
+            sheet.setColumnWidth(4 + i, 5 * 256);
         }
         sheet.setColumnWidth(4 + nbrDaysInThisMonth, 13 * 256);
         sheet.setColumnWidth(5 + nbrDaysInThisMonth, 13 * 256);
@@ -710,10 +796,7 @@ public class DefaultExcelWriter implements ExcelWriter {
             }
 
             if (rows.size() > 1 && rows.get(1) != null && rows.get(1).getCell(1) != null) {
-                Cell secondCellSecond = rows.get(1).getCell(1);
-                BigDecimal input = BigDecimal.valueOf(Helper.getRates(secondCellSecond.getStringCellValue()));
-                List<String> groupsId = CogsHelper.findGroupIdsByRate(input, FiscalYear.FY25, recogs);
-                newRow.createCell(2).setCellValue(groupsId.toString());
+                newRow.createCell(2).setCellValue(referenceData.findCategory(firstCell));
             }
 
             CellStyle currencyStyle = Helper.getCurrencyStyle(workbook);
